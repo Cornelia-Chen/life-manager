@@ -472,11 +472,11 @@ export const ButlerView: React.FC<ButlerViewProps> = ({ onBack, inventory, addTo
       }
   };
 
-  const handlePriceChange = (index: number, value: string) => {
+  const handleReviewItemUpdate = (index: number, field: string, value: any) => {
     setOcrReviewItems(prev => {
       if (!prev) return prev;
       const newItems = [...prev];
-      newItems[index] = { ...newItems[index], price: parseFloat(value) || 0 };
+      newItems[index] = { ...newItems[index], [field]: value };
       return newItems;
     });
   };
@@ -693,6 +693,7 @@ export const ButlerView: React.FC<ButlerViewProps> = ({ onBack, inventory, addTo
           </>
         ) : (
           <div className="w-full space-y-6 animate-in slide-in-from-right duration-300 pb-10">
+             {/* ... Settings Content (Name, Personality, etc) ... */}
              <div className="space-y-2">
                <label className="text-[10px] font-black text-purple-400 uppercase tracking-widest ml-2">{t.name}</label>
                <input 
@@ -801,8 +802,9 @@ export const ButlerView: React.FC<ButlerViewProps> = ({ onBack, inventory, addTo
         )}
       </div>
 
+      {/* OCR Review Modal */}
       {ocrReviewItems && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-300">
           <div className="bg-white p-6 rounded-[2rem] shadow-2xl border border-purple-200 w-full max-w-sm">
             <h3 className="text-lg font-black text-purple-800 mb-4">{t.review}</h3>
             <div className="space-y-3 max-h-64 overflow-y-auto custom-scrollbar mb-6">
@@ -812,7 +814,26 @@ export const ButlerView: React.FC<ButlerViewProps> = ({ onBack, inventory, addTo
                       <div className="text-3xl mr-3">{item.emoji}</div>
                       <div className="flex-1">
                         <div className="font-bold text-purple-800 text-xs">{item.translatedName}</div>
-                        <div className="text-[9px] text-purple-400">{item.quantity} {item.unit}</div>
+                      </div>
+                  </div>
+                  <div className="flex gap-2">
+                      <div className="flex-1">
+                          <label className="text-[8px] font-bold text-purple-400 uppercase">Qty</label>
+                          <input
+                            type="number"
+                            value={item.quantity || ''}
+                            onChange={(e) => handleReviewItemUpdate(index, 'quantity', parseFloat(e.target.value))}
+                            className="w-full px-2 py-1 text-xs bg-white border border-purple-200 rounded-md focus:ring-pink-500 text-purple-700 outline-none"
+                          />
+                      </div>
+                      <div className="flex-1">
+                          <label className="text-[8px] font-bold text-purple-400 uppercase">Unit</label>
+                          <input
+                            type="text"
+                            value={item.unit || ''}
+                            onChange={(e) => handleReviewItemUpdate(index, 'unit', e.target.value)}
+                            className="w-full px-2 py-1 text-xs bg-white border border-purple-200 rounded-md focus:ring-pink-500 text-purple-700 outline-none"
+                          />
                       </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -821,7 +842,7 @@ export const ButlerView: React.FC<ButlerViewProps> = ({ onBack, inventory, addTo
                       type="number"
                       placeholder="0.00"
                       value={item.price || ''}
-                      onChange={(e) => handlePriceChange(index, e.target.value)}
+                      onChange={(e) => handleReviewItemUpdate(index, 'price', parseFloat(e.target.value))}
                       className="flex-1 px-2 py-1 text-xs bg-white border border-purple-200 rounded-md focus:ring-pink-500 text-purple-700 outline-none"
                     />
                   </div>
@@ -890,23 +911,23 @@ export const ButlerView: React.FC<ButlerViewProps> = ({ onBack, inventory, addTo
                                    return (
                                      <div key={i} className="flex justify-between items-center bg-white border border-purple-100 px-3 py-2 rounded-lg">
                                          <span className="text-[9px] font-bold text-purple-700 flex-1 truncate mr-2">{ing.name}</span>
-                                         <div className="flex items-center gap-3">
-                                            <div className="flex items-center space-x-1 bg-purple-50 rounded-lg p-0.5">
+                                         <div className="flex items-center gap-2">
+                                            <div className="flex items-center bg-purple-50 rounded-lg p-1 h-7">
                                                 <button 
                                                   onClick={() => handleAdjustIngredient(recipe.id, ing.inventoryItemId, -1)}
-                                                  className="w-5 h-5 bg-white rounded shadow-sm flex items-center justify-center text-purple-400 active:scale-90 transition-transform"
+                                                  className="w-5 h-full flex items-center justify-center text-purple-400 active:text-purple-600 transition-colors"
                                                 >
                                                     <i className="fas fa-minus text-[8px]"></i>
                                                 </button>
-                                                <span className="text-xs font-black text-purple-800 w-5 text-center">{currentQty}</span>
+                                                <span className="text-xs font-black text-purple-800 w-6 text-center">{currentQty}</span>
                                                 <button 
                                                   onClick={() => handleAdjustIngredient(recipe.id, ing.inventoryItemId, 1)}
-                                                  className="w-5 h-5 bg-white rounded shadow-sm flex items-center justify-center text-purple-400 active:scale-90 transition-transform"
+                                                  className="w-5 h-full flex items-center justify-center text-purple-400 active:text-purple-600 transition-colors"
                                                 >
                                                     <i className="fas fa-plus text-[8px]"></i>
                                                 </button>
                                             </div>
-                                            {unit && <span className="text-[9px] font-bold text-purple-400 w-6 text-right truncate">{unit}</span>}
+                                            <span className="text-[10px] font-bold text-purple-400 w-8 text-center truncate">{unit}</span>
                                          </div>
                                      </div>
                                    );
