@@ -1,0 +1,10 @@
+{
+  "name": "Life Butler 3",
+  "description": "A high-performance image-to-text extraction tool powered by Gemini 3.0, featuring real-time OCR and a sleek user interface.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "theme_color": "#ec4899",
+  "background_color": "#f3e8ff"
+}
