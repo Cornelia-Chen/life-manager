@@ -1,5 +1,3 @@
-
-// ... existing imports
 import { GoogleGenAI, Type, FunctionDeclaration } from "@google/genai";
 import { VoxelModel } from "./voxelTypes";
 
@@ -53,7 +51,7 @@ async function safeGenAIRequest(
         });
 
         const text = response.text || "";
-        // 清理 AI 可能夹带的 Markdown 代码块
+        // 清理 AI 可能夹带的 Markdown 代码塊
         return text.replace(/```json/g, "").replace(/```/g, "").trim();
       } catch (error: any) {
         const isQuotaError = error.message?.includes('429') || error.message?.includes('quota');
@@ -72,7 +70,7 @@ async function safeGenAIRequest(
 export interface ConsumptionConfig { isEnabled: boolean; amount: number; frequency: 'day' | 'week' | 'month' | 'year'; lastCalculated: number; }
 export interface PurchaseRecord { timestamp: number; quantity: number; unitPrice: number; }
 export interface ReceiptItem { id: string; originalItemId?: string; name: string; translatedName: string; emoji: string; unit: string; assignedRoom: RoomType; history: PurchaseRecord[]; currentQuantity: number; photo?: string; voxelModel?: VoxelModel; alertType?: AlertType; lowStockThreshold?: number; expirationDate?: number; consumption?: ConsumptionConfig; showOnMap?: boolean; position?: { x: number; y: number }; rotation?: number; scale?: number; heightScale?: number; elevation?: number; sellerName?: string; priceTag?: number; description?: string; isPublic?: boolean; marketStatus?: 'selling' | 'sold'; }
-export interface OCRResult { items: Partial<ReceiptItem & { price: number; quantity: number; consumptionRate?: number; consumptionFreq?: string; isSelling?: boolean; askingPrice?: number }>[]; purchaseDate?: string; rawText?: string; }
+export interface OCRResult { items: Partial<ReceiptItem & { price: number; quantity: number; consumptionRate?: number; consumptionFreq?: string; isSelling?: boolean; askingPrice?: number }>[]; purchaseDate?: string; rawText?: string; fullText?: string; }
 export interface TravelConfig { isTravelMode: boolean; startDate?: number; endDate?: number; }
 export interface ButlerConfig { name: string; personality: Personality; appearance: { face: string; eyes: string; body: string; outfit: string; customAvatar?: string; scale?: number; }; customPrompt?: string; }
 export interface ChatMessage { id: string; sender: 'me' | 'other'; text: string; timestamp: number; aliceHint?: string; }
@@ -89,18 +87,23 @@ export async function processImageWithAI(base64Data: string, mimeType: string, l
   const isSingle = mode === 'single';
   
   const prompt = isSingle 
-    ? `Identify single object. Return JSON.
+    ? `TASK: 
+       Identify object. Return JSON:
        {
-         "items": [{"name": string, "quantity": number, "price": number, "unit": string, "assignedRoom": string}],
+         "items": [{"name": string, "emoji": string, "quantity": number, "price": number, "unit": string, "assignedRoom": string}],
          "purchaseDate": "YYYY-MM-DD"
        }
-       Translate name to ${lang}. Default quantity 1. Default room 'kitchen' unless furniture.`
-    : `Extract items from receipt/photo. Return JSON.
+       Translate to ${lang}.`
+    : `TASK:
+       Receipt OCR. FASTEST RESPONSE ONLY.
+       IMPORTANT: If an item is a multipack or set (套盒), extract the individual unit count. 
+       Example: "Yogurt 6x100g" should result in quantity: 6, unit: "bottle" or similar.
+       JSON FORMAT:
        {
-         "items": [{"name": string, "quantity": number, "price": number, "unit": string, "consumptionRate": number, "consumptionFreq": "day"|"week"}],
+         "items": [{"name": string, "emoji": string, "quantity": number, "price": number, "unit": string}],
          "purchaseDate": "YYYY-MM-DD"
        }
-       Translate name to ${lang}.`;
+       Translate to ${lang}. Skip all meta text.`;
 
   try {
     const text = await safeGenAIRequest(
@@ -111,21 +114,17 @@ export async function processImageWithAI(base64Data: string, mimeType: string, l
     const items = (json.items || []).map((i: any) => ({ 
       ...i, 
       translatedName: i.name, 
-      emoji: '📦', // Default placeholder
+      emoji: i.emoji || '📦',
       elevation: 0,
-      // If single mode, attach the scanned image as the photo property
       photo: isSingle ? `data:${mimeType};base64,${base64Data}` : undefined
     }));
-    
-    // Only predict emoji if NOT single mode (or as fallback)
-    if (!isSingle) {
-        for (const item of items) { item.emoji = await predictEmoji(item.name); }
-    } else {
-        // Even for single items, predict an emoji as metadata/fallback, but UI will prefer photo
-        for (const item of items) { item.emoji = await predictEmoji(item.name); }
-    }
 
-    return { items, purchaseDate: json.purchaseDate, rawText: text };
+    return { 
+      items, 
+      purchaseDate: json.purchaseDate, 
+      rawText: text,
+      fullText: "" 
+    };
   } catch (e: any) { return { items: [], rawText: e.toString() }; }
 }
 
@@ -137,19 +136,19 @@ export async function predictEmoji(name: string): Promise<string> {
 }
 
 export async function generateRecipes(inventory: ReceiptItem[], lang: LanguageCode, personality: Personality): Promise<Recipe[]> {
-    // Specifically filter for items that are currently in stock (quantity > 0)
     const availableItems = inventory
         .filter(i => i.currentQuantity > 0)
-        .map(i => `${i.translatedName}`)
+        .map(i => `${i.translatedName} (ID: ${i.id}, Unit: ${i.unit})`)
         .join(', ');
         
     const prompt = `Task: Suggest 3 creative recipes.
-    Ingredients: ${availableItems}
+    Ingredients provided (including their entry units): ${availableItems}
     
     IMPORTANT RULES:
-    1. Filter out NON-FOOD items (e.g., plastic bags, medicine, soap, electronics) completely.
-    2. Only use EDIBLE ingredients from the list.
-    3. If edible ingredients are scarce, suggest simple "survival" meals.
+    1. Filter out NON-FOOD items.
+    2. EDIBLE only.
+    3. MANDATORY: The 'quantityToConsume' MUST use the EXACT SAME 'Unit' as listed for that ingredient in the input. 
+    Example: if Milk is in 'bottle', consume '0.5 bottle', NOT '500ml'.
     4. Language: ${lang}.
     5. Personality: ${personality}.
     
@@ -162,26 +161,24 @@ export async function generateRecipes(inventory: ReceiptItem[], lang: LanguageCo
 
 export async function generateSaleAd(item: Partial<ReceiptItem>, lang: LanguageCode): Promise<string> {
     try {
-        const prompt = `Write a vivid, engaging, and complete sales advertisement for a used "${item.translatedName}". 
-        Role: A top-tier, charismatic salesperson or influencer.
-        Language: ${lang}.
+        const prompt = `Task: Write a VIVID, COMPLETE and COMPELLING sales ad for "${item.translatedName}".
+        Role: A charismatic influencer/professional salesperson.
+        Requirements:
+        1. Catchy headline with emojis.
+        2. Emotional hook (why this is great).
+        3. Clear details on benefits and quality.
+        4. Professional call to action.
+        5. Tone: Energetic and trustworthy.
+        6. Language: ${lang}.
+        7. Format: Clean text, NO markdown code blocks.`;
         
-        Requirements: 
-        1. Catchy Title: Start with a hook.
-        2. Vivid Description: Describe condition, features, and why they need it. Be specific and vivid.
-        3. Funny/Personal Touch: Add a small witty comment or backstory.
-        4. Call to Action: "DM me!" or similar.
-        5. Use emojis liberally to make it pop.
-        6. Length: Around 80-100 words. Comprehensive but readable.
-        7. No markdown code blocks, just plain text.`;
-        
-        return await safeGenAIRequest([{ text: prompt }], { maxOutputTokens: 500, temperature: 0.8 });
-    } catch { return "Check this out! Great condition!"; }
+        return await safeGenAIRequest([{ text: prompt }], { maxOutputTokens: 600, temperature: 0.9 });
+    } catch { return "Grab this amazing deal! Great condition and perfect for your home. ✨"; }
 }
 
 export async function analyzeHaggling(message: string, basePrice: number, lang: LanguageCode = 'zh-CN'): Promise<string> {
     try {
-        return await safeGenAIRequest([{ text: `Analyze buyer message: "${message}". Base: ${basePrice}. Lang: ${lang}. Max 15 words.` }], { maxOutputTokens: 50 });
+        return await safeGenAIRequest([{ text: `Analyze buyer message: "${message}". Base: ${basePrice}. Lang: ${lang}. Max 15 words.` }], { maxOutputTokens: 5 });
     } catch { return ""; }
 }
 
@@ -234,7 +231,6 @@ export async function generateVoxelModel(prompt: string, gridSize: number, layer
     return model;
   } catch (e) {
     console.error("Voxel Parsing Failed", e);
-    // 强制返回一个基本的“错误立方体”，结构必须完整以防崩溃
     return { 
       name: "Fallback Object", 
       gridSize, 

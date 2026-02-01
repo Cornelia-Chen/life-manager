@@ -1,5 +1,5 @@
 {
-  "name": "Life Butler 3",
+  "name": "Life Manager 3",
   "description": "A high-performance image-to-text extraction tool powered by Gemini 3.0, featuring real-time OCR and a sleek user interface.",
   "requestFramePermissions": [
     "camera",

@@ -1,11 +1,7 @@
-
-// ... (imports remain the same)
 import { RoomType, ReceiptItem, LanguageCode } from '../services/geminiService';
 import { VoxelModel, VoxelLayer } from '../services/voxelTypes';
 import { butlerModel } from '../services/blueprints/butlerModel';
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-
-// ... (interfaces remain the same)
 
 interface DoorConfig {
   side: 'north' | 'south' | 'east' | 'west';
@@ -29,37 +25,37 @@ interface RoomConfig {
 const DEFAULT_BLUEPRINTS: RoomConfig[] = [
   { 
     id: 'bedroom', x: 2, y: 2, w: 14, h: 18, centerX: 9, centerY: 11, 
-    wallColor: '#ffffff', floorColor: '#fce7f3', // Pink Floor
+    wallColor: '#ffffff', floorColor: '#fce7f3',
     doors: [{ side: 'east', offset: 12, width: 4 }, { side: 'south', offset: 2, width: 4 }]
   },
   { 
     id: 'cloakroom', x: 16, y: 2, w: 6, h: 18, centerX: 19, centerY: 11, 
-    wallColor: '#ffffff', floorColor: '#f3e8ff', // Purple Floor
+    wallColor: '#ffffff', floorColor: '#f3e8ff',
     doors: [{ side: 'west', offset: 12, width: 4 }]
   },
   { 
     id: 'bathroom', x: 24, y: 2, w: 12, h: 16, centerX: 30, centerY: 10, 
-    wallColor: '#ffffff', floorColor: '#e0f2fe', // Blue Floor
+    wallColor: '#ffffff', floorColor: '#e0f2fe',
     doors: [{ side: 'south', offset: 8, width: 4 }]
   },
   { 
     id: 'balcony', x: 38, y: 2, w: 8, h: 16, centerX: 42, centerY: 10, 
-    wallColor: '#ffffff', floorColor: '#ecfccb', // Green Floor
+    wallColor: '#ffffff', floorColor: '#ecfccb',
     doors: [{ side: 'south', offset: 2, width: 4 }]
   },
   { 
     id: 'kitchen', x: 2, y: 22, w: 14, h: 14, centerX: 9, centerY: 29, 
-    wallColor: '#ffffff', floorColor: '#fef3c7', // Yellow Floor
+    wallColor: '#ffffff', floorColor: '#fef3c7',
     doors: [{ side: 'east', offset: 4, width: 6 }]
   },
   { 
     id: 'storage', x: 2, y: 36, w: 14, h: 10, centerX: 9, centerY: 41, 
-    wallColor: '#ffffff', floorColor: '#f1f5f9', // Grey Floor
+    wallColor: '#ffffff', floorColor: '#f1f5f9',
     doors: [{ side: 'east', offset: 4, width: 4 }]
   },
   { 
     id: 'living', x: 18, y: 20, w: 28, h: 28, centerX: 32, centerY: 34, 
-    wallColor: '#ffffff', floorColor: '#ffe4e6', // Peach Floor
+    wallColor: '#ffffff', floorColor: '#ffe4e6',
     doors: [
         { side: 'north', offset: 14, width: 4 }, 
         { side: 'north', offset: 22, width: 4 }, 
@@ -115,7 +111,9 @@ interface FurnitureStackProps {
   item: ReceiptItem;
   isSelected: boolean;
   isDragging: boolean;
+  isFollowing: boolean;
   onMouseDown: (e: React.MouseEvent) => void;
+  onDoubleClick: (e: React.MouseEvent) => void;
   gridUnit: number;
   baseGap: number;
   rotation: number;
@@ -142,6 +140,7 @@ export const HouseView: React.FC<HouseViewProps> = ({
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 }); 
   const [isViewDragging, setIsViewDragging] = useState(false);
   const [draggingItemId, setDraggingItemId] = useState<string | null>(null);
+  const [followingItemId, setFollowingItemId] = useState<string | null>(null);
   const [lastMouse, setLastMouse] = useState({ x: 0, y: 0 });
   
   const [viewScale, setViewScale] = useState(0.75);
@@ -196,13 +195,10 @@ export const HouseView: React.FC<HouseViewProps> = ({
     }
   }, [selectedRoom]);
 
-  // 🟢 Updated Key Handler to ignore Inputs
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore key events if user is typing in an input or textarea
       const target = e.target as HTMLElement;
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
-
       const key = e.key.toLowerCase();
       if (['w', 'a', 's', 'd'].includes(key)) keysPressed.current.add(key);
     };
@@ -220,7 +216,7 @@ export const HouseView: React.FC<HouseViewProps> = ({
     const animate = () => {
       const keys = keysPressed.current;
       if (keys.size > 0) {
-          const moveSpeed = 1.5; // Increased from 0.8
+          const moveSpeed = 1.5;
           let dx = 0, dy = 0;
           if (keys.has('w')) dy -= moveSpeed;
           if (keys.has('s')) dy += moveSpeed;
@@ -239,7 +235,7 @@ export const HouseView: React.FC<HouseViewProps> = ({
              const dy = butlerTarget.current.y - prev.y;
              const dist = Math.sqrt(dx*dx + dy*dy);
              if (dist < 0.05) return prev; 
-             const speed = 0.4; // Increased from 0.15
+             const speed = 0.4;
              return { x: prev.x + dx * (speed / dist), y: prev.y + dy * (speed / dist) };
           });
       }
@@ -256,13 +252,17 @@ export const HouseView: React.FC<HouseViewProps> = ({
     } else if (selectedRoom) {
         targetRoom = DEFAULT_BLUEPRINTS.find(r => r.id === selectedRoom);
     }
-
     if (targetRoom) {
         butlerTarget.current = { x: targetRoom.centerX, y: targetRoom.centerY };
     }
   }, [walkToRoom, selectedRoom]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
+    // If we are currently following an item, clicking anywhere (floor or item) places it.
+    if (followingItemId) {
+      setFollowingItemId(null);
+      return;
+    }
     setIsViewDragging(true);
     setLastMouse({ x: e.clientX, y: e.clientY });
     dragDistance.current = 0;
@@ -274,7 +274,9 @@ export const HouseView: React.FC<HouseViewProps> = ({
     const deltaY = e.clientY - lastMouse.y;
     setLastMouse({ x: e.clientX, y: e.clientY });
 
-    if (isViewDragging) {
+    const activeId = draggingItemId || followingItemId;
+
+    if (isViewDragging && !activeId) {
       dragDistance.current += Math.abs(deltaX) + Math.abs(deltaY);
       if (selectedRoom) {
           setPanOffset(prev => ({ x: prev.x + deltaX, y: prev.y + deltaY }));
@@ -284,8 +286,8 @@ export const HouseView: React.FC<HouseViewProps> = ({
       return;
     }
 
-    if (draggingItemId) {
-        const item = inventory.find(i => i.id === draggingItemId);
+    if (activeId) {
+        const item = inventory.find(i => i.id === activeId);
         if (!item) return;
         
         const currentScale = autoFit ? (selectedRoom ? 2.0 : viewScale) : viewScale;
@@ -296,8 +298,10 @@ export const HouseView: React.FC<HouseViewProps> = ({
         const screenDy = deltaY * scaleFactor;
         const gridDxPixel = screenDx * Math.cos(rad) - screenDy * Math.sin(rad);
         const gridDyPixel = screenDx * Math.sin(rad) + screenDy * Math.cos(rad);
+        
         dragAccumulator.current.x += gridDxPixel;
         dragAccumulator.current.y += gridDyPixel;
+        
         let moveX = 0, moveY = 0;
         if (Math.abs(dragAccumulator.current.x) >= GRID_UNIT) {
             moveX = Math.sign(dragAccumulator.current.x);
@@ -307,13 +311,14 @@ export const HouseView: React.FC<HouseViewProps> = ({
             moveY = Math.sign(dragAccumulator.current.y);
             dragAccumulator.current.y -= moveY * GRID_UNIT;
         }
+        
         if (moveX !== 0 || moveY !== 0) {
             const currentX = item.position?.x || 24;
             const currentY = item.position?.y || 24;
             const newX = Math.round(currentX + moveX);
             const newY = Math.round(currentY + moveY);
             const newRoom = DEFAULT_BLUEPRINTS.find(r => newX >= r.x && newX < r.x + r.w && newY >= r.y && newY < r.y + r.h);
-            onItemMove(draggingItemId, newX, newY, newRoom?.id);
+            onItemMove(activeId, newX, newY, newRoom?.id);
         }
     }
   };
@@ -350,6 +355,10 @@ export const HouseView: React.FC<HouseViewProps> = ({
   const handleRoomWalk = (room: RoomConfig, e: React.MouseEvent) => {
       e.stopPropagation();
       if (dragDistance.current > 5) return;
+      if (followingItemId) {
+          setFollowingItemId(null);
+          return;
+      }
 
       const gridX = e.nativeEvent.offsetX / GRID_UNIT;
       const gridY = e.nativeEvent.offsetY / GRID_UNIT;
@@ -359,13 +368,11 @@ export const HouseView: React.FC<HouseViewProps> = ({
 
   const isButlerMoving = keysPressed.current.size > 0 || Math.abs(butlerPos.x - butlerTarget.current.x) > 0.1 || Math.abs(butlerPos.y - butlerTarget.current.y) > 0.1;
   const isFollowingButler = autoFit && !selectedRoom;
-  const shouldSnap = isViewDragging || draggingItemId || (isFollowingButler && isButlerMoving);
+  const shouldSnap = isViewDragging || draggingItemId || followingItemId || (isFollowingButler && isButlerMoving);
 
   const getTargetTransform = () => {
       if (!autoFit) return { x: 0, y: 0, scale: viewScale };
-
       const floorCenterPixel = (FLOOR_SIZE * GRID_UNIT) / 2;
-
       if (selectedRoom) {
           const room = DEFAULT_BLUEPRINTS.find(r => r.id === selectedRoom);
           if (room && containerSize.width > 0 && containerSize.height > 0) {
@@ -383,26 +390,22 @@ export const HouseView: React.FC<HouseViewProps> = ({
               };
           }
       } 
-      
       const butlerXPixel = butlerPos.x * GRID_UNIT;
       const butlerYPixel = butlerPos.y * GRID_UNIT;
       const centerOffsetY = 4 * GRID_UNIT; 
-
       const targetX = -(butlerXPixel - floorCenterPixel);
       const targetY = -(butlerYPixel - centerOffsetY - floorCenterPixel);
-      
       return { x: targetX, y: targetY, scale: viewScale };
   };
 
   const currentTransform = getTargetTransform();
-
   const handlePadStart = (key: string) => { keysPressed.current.add(key); };
   const handlePadEnd = (key: string) => { keysPressed.current.delete(key); };
 
   return (
     <div 
       ref={containerRef}
-      className={`relative w-full h-full flex items-center justify-center overflow-hidden bg-[#f5f3ff] select-none group/view ${isViewDragging ? 'cursor-grabbing' : draggingItemId ? 'cursor-move' : 'cursor-grab'}`}
+      className={`relative w-full h-full flex items-center justify-center overflow-hidden bg-[#f5f3ff] select-none group/view ${isViewDragging ? 'cursor-grabbing' : (draggingItemId || followingItemId) ? 'cursor-move' : 'cursor-grab'}`}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={() => { setIsViewDragging(false); setDraggingItemId(null); }}
@@ -410,7 +413,6 @@ export const HouseView: React.FC<HouseViewProps> = ({
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={() => setIsViewDragging(false)}
-      onDoubleClick={onDoubleClick}
       onWheel={handleWheel}
     >
       <div 
@@ -477,7 +479,32 @@ export const HouseView: React.FC<HouseViewProps> = ({
             if (!item.showOnMap) return null;
             if (item.currentQuantity <= 0) return null;
             if (selectedRoom && item.assignedRoom !== selectedRoom) return null; 
-            return <FurnitureStack key={item.id} item={item} isSelected={selectedItemId === item.id} isDragging={draggingItemId === item.id} onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); if (onSelectItem) onSelectItem(item.id); setDraggingItemId(item.id); setLastMouse({ x: e.clientX, y: e.clientY }); dragAccumulator.current = { x: 0, y: 0 }; }} gridUnit={GRID_UNIT} baseGap={BASE_GAP} rotation={rotation.z} />;
+            return (
+              <FurnitureStack 
+                key={item.id} 
+                item={item} 
+                isSelected={selectedItemId === item.id} 
+                isDragging={draggingItemId === item.id} 
+                isFollowing={followingItemId === item.id}
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  setFollowingItemId(item.id);
+                  if (onSelectItem) onSelectItem(item.id);
+                }}
+                onMouseDown={(e) => { 
+                  if (followingItemId) return; // Handled by container's MouseDown (placement)
+                  e.stopPropagation(); 
+                  e.preventDefault(); 
+                  if (onSelectItem) onSelectItem(item.id); 
+                  setDraggingItemId(item.id); 
+                  setLastMouse({ x: e.clientX, y: e.clientY }); 
+                  dragAccumulator.current = { x: 0, y: 0 }; 
+                }} 
+                gridUnit={GRID_UNIT} 
+                baseGap={BASE_GAP} 
+                rotation={rotation.z} 
+              />
+            );
         })}
       </div>
       
@@ -502,7 +529,6 @@ export const HouseView: React.FC<HouseViewProps> = ({
                         <i className="fas fa-chevron-up text-[10px]"></i>
                     </button>
                     <div />
-                    
                     <button 
                         onMouseDown={() => handlePadStart('a')} onMouseUp={() => handlePadEnd('a')} onMouseLeave={() => handlePadEnd('a')}
                         onTouchStart={(e) => { e.preventDefault(); handlePadStart('a'); }} onTouchEnd={(e) => { e.preventDefault(); handlePadEnd('a'); }}
@@ -510,11 +536,9 @@ export const HouseView: React.FC<HouseViewProps> = ({
                     >
                         <i className="fas fa-chevron-left text-[10px]"></i>
                     </button>
-                    
                     <div className="w-7 h-7 flex items-center justify-center">
                         <div className="w-1.5 h-1.5 bg-slate-300 rounded-full"></div>
                     </div>
-
                     <button 
                         onMouseDown={() => handlePadStart('d')} onMouseUp={() => handlePadEnd('d')} onMouseLeave={() => handlePadEnd('d')}
                         onTouchStart={(e) => { e.preventDefault(); handlePadStart('d'); }} onTouchEnd={(e) => { e.preventDefault(); handlePadEnd('d'); }}
@@ -522,7 +546,6 @@ export const HouseView: React.FC<HouseViewProps> = ({
                     >
                         <i className="fas fa-chevron-right text-[10px]"></i>
                     </button>
-
                     <div />
                     <button 
                         onMouseDown={() => handlePadStart('s')} onMouseUp={() => handlePadEnd('s')} onMouseLeave={() => handlePadEnd('s')}
@@ -540,7 +563,6 @@ export const HouseView: React.FC<HouseViewProps> = ({
   );
 };
 
-// ... (Rest of the component remains the same: VolumetricWall, Room3D, VoxelCharacter, FurnitureStack, LayerCanvas)
 const VolumetricWall: React.FC<{ 
     width: number, 
     height: number, 
@@ -568,11 +590,9 @@ const VolumetricWall: React.FC<{
         poly += ', 0% 100%)';
         clipPath = poly;
     }
-
     const topColor = color; 
     const faceColor = darkenColor(color, 10); 
     const sideColor = darkenColor(color, 20); 
-
     return (
         <div 
             className="absolute transform-style-3d transition-opacity duration-500"
@@ -617,7 +637,6 @@ const Room3D: React.FC<{
     const roomW = room.w * gridUnit;
     const roomH = room.h * gridUnit;
     const roomName = ROOM_NAMES[currentLang]?.[room.id] || room.id;
-
     const getWallOpacity = (side: 'north' | 'south' | 'east' | 'west') => {
         if (!showWalls) return 0; 
         if (isSelected) {
@@ -640,7 +659,6 @@ const Room3D: React.FC<{
         }
         return opacity;
     };
-
     return (
         <div className={`absolute transition-all duration-500 transform-style-3d group ${isSelected ? 'shadow-2xl z-10' : ''}`} style={{ left: `${room.x * gridUnit}px`, top: `${room.y * gridUnit}px`, width: `${roomW}px`, height: `${roomH}px`, transformStyle: 'preserve-3d' }} onClick={onFloorClick}>
             <div className="absolute inset-0 transition-colors duration-300 cursor-pointer" style={{ backgroundColor: room.floorColor, opacity: 1, border: `1px solid ${isSelected ? '#3b82f6' : 'rgba(0,0,0,0.05)'}`, boxShadow: isSelected ? '0 20px 50px rgba(0,0,0,0.1)' : 'none' }}>
@@ -667,30 +685,23 @@ const VoxelCharacter: React.FC<VoxelCharacterProps> = ({ model, x, y, gridUnit, 
             return () => clearInterval(interval);
         } else setBounce(0);
     }, [isMoving, imageSrc]);
-    
     const displaySize = model.gridSize * (gridUnit / 4) * (imageSrc ? 1 : scale);
     const characterHeight = model.layerCount * baseGap * scale;
-    
-    // Adjust bubble height: Use a larger offset if it's an image avatar (which is tall)
     const bubbleZ = imageSrc ? (160 * scale + 40) : (characterHeight + 100);
-
     return (
         <div className="absolute z-20 transition-transform duration-100 ease-linear cursor-pointer group" onClick={onClick} style={{ left: `${x * gridUnit}px`, top: `${y * gridUnit}px`, width: `${displaySize}px`, height: `${displaySize}px`, marginLeft: `-${displaySize/2}px`, marginTop: `-${displaySize/2}px`, transform: `translateZ(${bounce}px)`, transformStyle: 'preserve-3d' }}>
             <div className="absolute inset-0 bg-black/40 blur-md rounded-full transform translate-z-[-2px] scale-75" />
-            
             {imageSrc ? (
                 <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-16 h-20 origin-bottom" style={{ transform: `rotateZ(${-rotation}deg) rotateX(-60deg) scale(${2 * scale})`, backfaceVisibility: 'hidden', transformStyle: 'preserve-3d' }}><img src={imageSrc} alt="Butler" className="w-full h-full object-contain filter drop-shadow-xl" /></div>
             ) : model.layers.map((layer, lIdx) => <LayerCanvas key={lIdx} layer={layer} layerAbove={model.layers[lIdx + 1]} model={model} z={lIdx * baseGap * scale} isSelected={false} />)}
-            
-            {/* Improved Speech Bubble - Floats correctly in 3D space above the head */}
             {message && (
                 <div 
                     className="absolute left-1/2 -translate-x-1/2 z-[100] pointer-events-auto" 
                     onClick={(e) => { e.stopPropagation(); onDismissMessage?.(); }} 
                     style={{ 
-                        transform: `translateZ(${bubbleZ}px) rotateZ(${-rotation}deg) rotateX(-60deg)`, // Elevate + Counter Rotate
+                        transform: `translateZ(${bubbleZ}px) rotateZ(${-rotation}deg) rotateX(-60deg)`, 
                         transformOrigin: 'bottom center',
-                        bottom: '0', // Anchor to bottom of this div, then translated up by Z
+                        bottom: '0', 
                         width: 'auto',
                         minWidth: '180px',
                         maxWidth: '240px'
@@ -698,13 +709,11 @@ const VoxelCharacter: React.FC<VoxelCharacterProps> = ({ model, x, y, gridUnit, 
                 >
                     <div className="bg-white/95 backdrop-blur text-purple-800 p-3 rounded-2xl rounded-bl-none shadow-2xl border-2 border-pink-100 text-[10px] font-bold leading-tight animate-bounce-custom relative">
                         {message}
-                        {/* Little tail pointing down */}
                         <div className="absolute -bottom-1.5 left-4 w-3 h-3 bg-white rotate-45 border-r border-b border-pink-100"></div>
                         <button onClick={(e) => { e.stopPropagation(); onDismissMessage?.(); }} className="absolute -top-2 -right-2 bg-pink-500 text-white w-5 h-5 rounded-full flex items-center justify-center text-[10px] shadow-md hover:scale-110 transition-transform"><i className="fas fa-times"></i></button>
                     </div>
                 </div>
             )}
-            
             <style>{`
                 @keyframes bounce-custom {
                     0%, 100% { transform: translateY(0); }
@@ -718,7 +727,7 @@ const VoxelCharacter: React.FC<VoxelCharacterProps> = ({ model, x, y, gridUnit, 
     );
 };
 
-const FurnitureStack: React.FC<FurnitureStackProps> = ({ item, isSelected, isDragging, onMouseDown, gridUnit, baseGap, rotation }) => {
+const FurnitureStack: React.FC<FurnitureStackProps> = ({ item, isSelected, isDragging, isFollowing, onMouseDown, onDoubleClick, gridUnit, baseGap, rotation }) => {
   const model = item.voxelModel;
   const posX = item.position?.x || 24;
   const posY = item.position?.y || 24;
@@ -727,43 +736,93 @@ const FurnitureStack: React.FC<FurnitureStackProps> = ({ item, isSelected, isDra
   const heightScale = item.heightScale || 1.0;
   const elevation = item.elevation || 0;
   const itemLayerGap = baseGap * itemScale * heightScale;
-  const displaySize = model ? model.gridSize * (gridUnit / 4) * itemScale : 4 * gridUnit * itemScale; 
+  
+  // Calculate bounding box for tight interaction area
+  const bounds = useMemo(() => {
+    if (!model) return null;
+    let minC = model.gridSize, maxC = 0, minR = model.gridSize, maxR = 0;
+    let hasContent = false;
+    model.layers.forEach(layer => {
+      layer.rows.forEach((row, rIdx) => {
+        for (let cIdx = 0; cIdx < row.length; cIdx++) {
+          if (row[cIdx] !== '.') {
+            minC = Math.min(minC, cIdx);
+            maxC = Math.max(maxC, cIdx);
+            minR = Math.min(minR, rIdx);
+            maxR = Math.max(maxR, rIdx);
+            hasContent = true;
+          }
+        }
+      });
+    });
+    return hasContent ? { minC, maxC, minR, maxR } : null;
+  }, [model]);
+
+  const pixelScale = gridUnit / 4;
+  const fullSize = model ? model.gridSize * pixelScale * itemScale : 4 * gridUnit * itemScale;
+  
+  // Hitbox is only as big as the used cells
+  const hitboxWidth = bounds ? (bounds.maxC - bounds.minC + 1) * pixelScale * itemScale : fullSize;
+  const hitboxHeight = bounds ? (bounds.maxR - bounds.minR + 1) * pixelScale * itemScale : fullSize;
+  
+  const isActive = isSelected || isDragging || isFollowing;
+
+  // Visual offsets to center the content within the coordinate-aligned hitbox
+  // We offset the LayerCanvas grid so the content appears centered on the coordinate
+  const contentCenterX = bounds ? (bounds.minC + bounds.maxC + 1) / 2 : (model?.gridSize || 0) / 2;
+  const contentCenterY = bounds ? (bounds.minR + bounds.maxR + 1) / 2 : (model?.gridSize || 0) / 2;
+  const gridOffsetUnitsX = (model ? model.gridSize / 2 : 0) - contentCenterX;
+  const gridOffsetUnitsY = (model ? model.gridSize / 2 : 0) - contentCenterY;
+  const pixelOffsetX = gridOffsetUnitsX * pixelScale * itemScale;
+  const pixelOffsetY = gridOffsetUnitsY * pixelScale * itemScale;
 
   return (
     <div 
-      className={`furniture-item absolute transition-shadow ${isSelected || isDragging ? 'z-50' : 'z-10'}`}
+      className={`furniture-item absolute transition-shadow ${isActive ? 'z-50' : 'z-10'}`}
       onMouseDown={onMouseDown}
+      onDoubleClick={onDoubleClick}
       style={{
         left: `${posX * gridUnit}px`, 
         top: `${posY * gridUnit}px`,
-        width: `${displaySize}px`,
-        height: `${displaySize}px`,
-        marginLeft: `-${displaySize/2}px`, 
-        marginTop: `-${displaySize/2}px`,
+        width: `${hitboxWidth}px`,
+        height: `${hitboxHeight}px`,
+        marginLeft: `-${hitboxWidth/2}px`, 
+        marginTop: `-${hitboxHeight/2}px`,
         transform: `translateZ(${elevation}px) rotateZ(${itemRot}deg)`,
         transformStyle: 'preserve-3d',
         pointerEvents: 'auto',
-        cursor: isDragging ? 'grabbing' : 'grab'
+        cursor: (isDragging || isFollowing) ? 'move' : 'grab'
       }}
     >
-      {(isSelected || isDragging) && (
-        <div className={`absolute inset-[-4px] border-2 rounded-lg transition-all ${isDragging ? 'border-green-400 shadow-[0_0_30px_rgba(74,222,128,0.4)] bg-green-400/10' : 'border-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.5)] animate-pulse'}`} />
+      {isActive && (
+        <div className={`absolute inset-[-4px] border-2 rounded-lg transition-all ${isDragging || isFollowing ? 'border-green-400 shadow-[0_0_30px_rgba(74,222,128,0.4)] bg-green-400/10' : 'border-blue-50 shadow-[0_0_20px_rgba(59,130,246,0.5)] animate-pulse'}`} />
       )}
-      
-      {/* Quantity Badge on Map */}
       {item.currentQuantity > 1 && (
         <div className="absolute -top-3 -right-3 bg-red-500 text-white text-[8px] font-black rounded-full w-5 h-5 flex items-center justify-center border-2 border-white z-20 shadow-sm animate-in zoom-in duration-300">
             {Math.floor(item.currentQuantity)}
         </div>
       )}
-
       {model ? (
-          <>
+          <div className="relative" style={{ width: hitboxWidth, height: hitboxHeight, transformStyle: 'preserve-3d' }}>
             <div className="absolute inset-1 bg-black/60 blur-md transform translate-z-[-2px] rounded-full opacity-60" />
             {model.layers.map((layer, lIdx) => (
-                <LayerCanvas key={lIdx} layer={layer} layerAbove={model.layers[lIdx + 1]} model={model} z={lIdx * itemLayerGap} isSelected={isSelected} />
+                <div 
+                  key={lIdx} 
+                  className="absolute pointer-events-none" 
+                  style={{ 
+                    width: fullSize, 
+                    height: fullSize, 
+                    left: '50%', top: '50%', 
+                    // Centering calculation: Center the 20x20 grid on the hitbox div, 
+                    // then apply pixelOffsetX/Y to align the actual model content with the center point.
+                    transform: `translate(-50%, -50%) translate(${pixelOffsetX}px, ${pixelOffsetY}px) translateZ(${lIdx * itemLayerGap}px)`,
+                    transformStyle: 'preserve-3d' 
+                  }}
+                >
+                  <LayerCanvas layer={layer} layerAbove={model.layers[lIdx + 1]} model={model} z={0} isSelected={isSelected} />
+                </div>
             ))}
-          </>
+          </div>
       ) : (
           <div className="w-full h-full flex items-center justify-center relative" style={{ transformStyle: 'preserve-3d' }}>
               <div className="absolute inset-0 flex items-center justify-center" style={{ transform: `rotateZ(${-rotation - itemRot}deg) rotateX(-60deg) translateY(-50%)`, transformOrigin: 'bottom center', backfaceVisibility: 'hidden' }}>

@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { GoogleGenAI, GenerateContentResponse, LiveServerMessage, Modality } from "@google/genai";
 import { Layout } from './components/Layout';
@@ -17,7 +16,7 @@ import { getAllBlueprints, initializeRepository } from './services/voxelReposito
 import { BlueprintRecord } from './services/voxelTypes';
 import { INITIAL_INVENTORY } from './services/initialInventory';
 
-// --- Audio Helpers (Duplicated to keep App.tsx self-contained for map voice) ---
+// --- Audio Helpers ---
 function encode(bytes: Uint8Array) {
   let binary = '';
   const len = bytes.byteLength;
@@ -185,17 +184,11 @@ const App: React.FC = () => {
 
   const [butlerMessage, setButlerMessage] = useState<string | null>(null);
 
-  // Computed inventory: Exclude default items (starts with 'default') that have 0 price from counts and lists
-  // Also exclude consumed items (quantity <= 0) and sold items
   const effectiveInventory = useMemo(() => inventory.filter(item => {
-      // Exclude sold items
       if (item.marketStatus === 'sold') return false;
-      // Exclude consumed/empty items
       if (item.currentQuantity <= 0) return false;
-
       const isDefault = item.id.startsWith('default');
       const price = item.history[0]?.unitPrice || 0;
-      // Filter out if it IS default AND has 0 price
       return !(isDefault && price === 0);
   }), [inventory]);
 
@@ -468,7 +461,6 @@ const App: React.FC = () => {
     if (savedInv) {
         setInventory(JSON.parse(savedInv));
     } else {
-        // 如果没有存档，则初始化默认家具
         setInventory(INITIAL_INVENTORY);
     }
 
@@ -514,12 +506,10 @@ const App: React.FC = () => {
     }
   }, [targetLang, inventory]);
 
-  const addToInventory = (ocrItems: Partial<ReceiptItem & { price: number; quantity: number; consumptionRate?: number; consumptionFreq?: string; isSelling?: boolean; askingPrice?: number } & { consumption?: ConsumptionConfig }>[]) => {
-    // 1. Separate new items from restocks of existing non-empty items
+  const addToInventory = (ocrItems: Partial<ReceiptItem & { price: number; quantity: number }>[]) => {
     const restockCandidates: Partial<ReceiptItem & { quantity: number; price: number }>[] = [];
     const directAddItems: typeof ocrItems = [];
-
-    const tempInventory = [...inventory]; // Use a temp reference for finding matches
+    const tempInventory = [...inventory];
 
     ocrItems.forEach(newItem => {
         const name = (newItem.translatedName || newItem.name || "Unknown").trim();
@@ -531,19 +521,17 @@ const App: React.FC = () => {
             && item.unit.toLowerCase() === unit.toLowerCase()
         );
 
-        if (existingItem && existingItem.currentQuantity > 0 && !newItem.isSelling) {
-            restockCandidates.push(newItem);
+        if (existingItem && existingItem.currentQuantity > 0 && !(newItem as any).isSelling) {
+            restockCandidates.push(newItem as any);
         } else {
             directAddItems.push(newItem);
         }
     });
 
-    // 2. Add direct items immediately
     if (directAddItems.length > 0) {
         processBatch(directAddItems);
     }
 
-    // 3. Initiate Restock Check Flow if needed
     if (restockCandidates.length > 0) {
         const existing = inventory.find(i => i.translatedName === restockCandidates[0].translatedName || i.name === restockCandidates[0].name);
         if (existing) {
@@ -572,8 +560,6 @@ const App: React.FC = () => {
       const unit = (newItem.unit || "unit").trim();
       const price = Number(newItem.price) || 0;
       const unitPrice = quantity > 0 ? price / quantity : 0;
-      
-      // Override room to living if selling, per user request
       const assignedRoom = newItem.isSelling ? 'living' : (newItem.assignedRoom || 'storage'); 
 
       const existingIndex = updatedInventory.findIndex(item => 
@@ -585,7 +571,6 @@ const App: React.FC = () => {
         const target = updatedInventory[existingIndex];
         let updatedConsumption = target.consumption;
         
-        // --- Regular Smart Consumption Logic (if enabled is false but purchased again) ---
         if (target.consumption && !target.consumption.isEnabled && target.history.length > 0) {
             const lastRecord = target.history[0]; 
             const timeDiff = recordTimestamp - lastRecord.timestamp;
@@ -630,7 +615,7 @@ const App: React.FC = () => {
           photo: newItem.photo,
           alertType: 'none', 
           consumption: initConsumption,
-          showOnMap: newItem.showOnMap !== undefined ? newItem.showOnMap : (index === 0 || newItem.isSelling), // Default show on map for first or sold items
+          showOnMap: newItem.showOnMap !== undefined ? newItem.showOnMap : (index === 0 || newItem.isSelling), 
           position: { x: roomCenter.x + randomOffsetX, y: roomCenter.y + randomOffsetY },
           marketStatus: newItem.isSelling ? 'selling' : undefined,
           isPublic: newItem.isSelling,
@@ -663,7 +648,6 @@ const App: React.FC = () => {
       }
     });
     
-    // Also push to community if selling
     if (marketItemsToAdd.length > 0) {
         setCommunityItems(prev => [...marketItemsToAdd, ...prev]);
     }
@@ -672,7 +656,6 @@ const App: React.FC = () => {
     setInventory(updatedInventory);
 
     if (itemsToAdd.length > 0) {
-        // Recalculate target rooms based on final assignments
         const targetRooms = Array.from(new Set(updatedInventory.filter(i => itemsToAdd.some(add => add.name === i.name || add.translatedName === i.translatedName)).map(i => i.assignedRoom || 'storage')));
         const itemNames = itemsToAdd.slice(0, 2).map(i => i.translatedName || i.name || 'Item').join(targetLang === 'zh-CN' ? '、' : ', ');
         const moreCount = itemsToAdd.length > 2 ? (targetLang === 'zh-CN' ? `等${itemsToAdd.length}件物品` : ` and ${itemsToAdd.length - 2} more`) : '';
@@ -680,10 +663,10 @@ const App: React.FC = () => {
         let msg = '';
         if (targetLang === 'zh-CN') {
              const roomNames = targetRooms.map(r => roomMap[r] || r).join('和');
-             msg = `已将 ${itemNames}${moreCount} 放入${roomNames}。`;
+             msg = `已将 ${itemNames}${moreCount} 放入${roomNames}。点击房间可以查看物品列表哦！`;
         } else {
              const roomNames = targetRooms.join(' and ');
-             msg = `I've put ${itemNames}${moreCount} in the ${roomNames}.`;
+             msg = `I've put ${itemNames}${moreCount} in the ${roomNames}. You can click the rooms to view the item list!`;
         }
         if (smartConsumptionMessage) msg = `${msg} ${smartConsumptionMessage}`;
         setButlerMessage(msg);
@@ -707,15 +690,11 @@ const App: React.FC = () => {
           let newCurrentQty = target.currentQuantity + newQ;
 
           if (didFinishPrevious) {
-              // Logic: User said they finished old stock.
-              // 1. Calculate rate based on previous purchase
               if (target.history.length > 0) {
                   const lastPurchase = target.history[0];
                   const daysDiff = Math.max(1, (recordTimestamp - lastPurchase.timestamp) / (1000 * 3600 * 24));
-                  // Amount consumed is the amount purchased last time (assuming it was full restocking)
                   const dailyRate = lastPurchase.quantity / daysDiff;
                   
-                  // Suggest/Update Consumption
                   let newFreq: 'day'|'week'|'month'|'year' = 'month';
                   let newAmount = dailyRate * 30;
                   
@@ -725,11 +704,10 @@ const App: React.FC = () => {
                   newAmount = parseFloat(newAmount.toFixed(2));
                   if (newAmount <= 0) newAmount = 0.01;
 
-                  // Check deviation from existing setting
                   const currentDaily = target.consumption?.isEnabled 
                         ? (target.consumption.frequency === 'day' ? target.consumption.amount 
                           : target.consumption.frequency === 'week' ? target.consumption.amount/7 
-                          : target.consumption.amount/30) 
+                          : target.consumption.frequency === 'month' ? target.consumption.amount : target.consumption.amount/30) 
                         : 0;
                   
                   const deviation = Math.abs(dailyRate - currentDaily) / (dailyRate || 1);
@@ -749,7 +727,6 @@ const App: React.FC = () => {
                           : `Updated usage: ${newAmount}${target.unit}/${newFreq}`);
                   }
               }
-              // 2. Reset quantity logic: If finished, current becomes 0 + new
               newCurrentQty = newQ;
           }
 
@@ -761,11 +738,9 @@ const App: React.FC = () => {
           };
           setInventory(updatedInventory);
       } else {
-          // Fallback if item missing
           processBatch([newItem]);
       }
 
-      // Proceed queue
       if (pendingQueue.length > 0) {
           const nextExisting = inventory.find(i => i.translatedName === pendingQueue[0].translatedName || i.name === pendingQueue[0].name);
           if (nextExisting) {
@@ -775,7 +750,7 @@ const App: React.FC = () => {
                   pendingQueue: pendingQueue.slice(1)
               });
           } else {
-              processBatch(pendingQueue); // Process remaining if match lost
+              processBatch(pendingQueue); 
               setRestockCheck(null);
               setStep('home');
               setOcrResult(null);
@@ -844,14 +819,11 @@ const App: React.FC = () => {
         handleReviewItemChange(index, { isSelling: false, askingPrice: undefined, description: undefined });
         return;
     }
-    
     setSellModalState({ index, ad: '', price: item.price?.toString() || '', loading: true });
-    
     try {
         const tempItem: Partial<ReceiptItem> = {
             translatedName: item.translatedName || item.name,
             name: item.name,
-            // Add other necessary fields if needed by generator
         };
         const ad = await generateSaleAd(tempItem, targetLang);
         setSellModalState(prev => prev ? { ...prev, ad, loading: false } : null);
@@ -893,13 +865,12 @@ const App: React.FC = () => {
     setButlerMessage(msg);
   }, [targetLang]); 
 
- const handleFindItem = useCallback((searchName: string) => {
+  const handleFindItem = useCallback((searchName: string) => {
     const normalizedSearch = searchName.toLowerCase();
     const foundItem = inventory.find(item => 
         item.translatedName.toLowerCase().includes(normalizedSearch) || 
         item.name.toLowerCase().includes(normalizedSearch)
       );
-    
     if (foundItem) {
         setStep('home'); 
         setSelectedRoom(foundItem.assignedRoom); 
@@ -933,8 +904,6 @@ const App: React.FC = () => {
         currentQuantity: 1
     };
     setCommunityItems(prev => [newItem, ...prev]);
-    
-    // Update inventory item with listing details so Detail View shows the Ad/Market state
     setInventory(prev => prev.map(i => i.id === item.id ? { 
         ...i, 
         marketStatus: 'selling',
@@ -943,35 +912,27 @@ const App: React.FC = () => {
         sellerName: 'Me',
         isPublic: true
     } : i));
-    
     setInitialCommunityView('market');
     setStep('plaza');
     setButlerMessage(targetLang === 'zh-CN' ? '已成功上架到广场！' : 'Successfully listed on Plaza!');
   };
 
   const handleMarkAsSold = (item: ReceiptItem) => {
-      // Logic to sync Sold status across Inventory and Community items
       const updatedItem = { ...item, marketStatus: 'sold' as 'sold', currentQuantity: 0, showOnMap: false };
-      
-      // 1. Update the item itself in both lists (wherever it exists)
       setCommunityItems(prev => prev.map(i => i.id === item.id ? updatedItem : i));
       setInventory(prev => prev.map(i => i.id === item.id ? updatedItem : i));
-
-      // 2. Synchronization
       if (item.originalItemId) {
-          // Case A: We clicked the Community Item. Update the Parent Inventory Item.
           setInventory(prev => prev.map(i => {
               if (i.id === item.originalItemId) {
                   return { 
                       ...i, 
                       currentQuantity: Math.max(0, i.currentQuantity - 1),
-                      marketStatus: i.currentQuantity - 1 > 0 ? i.marketStatus : 'sold' // Keep selling if stock remains
+                      marketStatus: i.currentQuantity - 1 > 0 ? i.marketStatus : 'sold'
                   };
               }
               return i;
           }));
       } else {
-          // Case B: We clicked the Inventory Item. Update any Child Community Items.
           setCommunityItems(prev => prev.map(i => {
               if (i.originalItemId === item.id) {
                   return { ...i, marketStatus: 'sold', currentQuantity: 0 };
@@ -979,22 +940,17 @@ const App: React.FC = () => {
               return i;
           }));
       }
-      
       setSelectedItem(updatedItem);
   };
 
   const handleCancelListing = (item: ReceiptItem) => {
-      // Remove from community
       setCommunityItems(prev => prev.filter(i => i.originalItemId !== item.id && i.id !== item.id));
-      
-      // Reset inventory item
       const resetItem = { 
           ...item, 
           marketStatus: undefined, 
           isPublic: false, 
           sellerName: undefined, 
           priceTag: undefined 
-          // Keep description as it might be useful info, or clear it? Keeping it is safer.
       };
       setInventory(prev => prev.map(i => i.id === item.id ? resetItem : i));
       setSelectedItem(resetItem);
@@ -1007,7 +963,7 @@ const App: React.FC = () => {
       setStep('item_detail');
   };
 
-   const handleOpenConversation = (conv: Conversation) => {
+  const handleOpenConversation = (conv: Conversation) => {
       setSelectedConversationId(conv.id);
       setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, unread: false } : c));
       const linkedItem = communityItems.find(i => i.translatedName === conv.itemName) || inventory.find(i => i.translatedName === conv.itemName);
@@ -1029,7 +985,7 @@ const App: React.FC = () => {
       }
   };
 
-    const handleMessageSent = (text: string) => {
+  const handleMessageSent = (text: string) => {
      if (selectedConversationId) {
          setConversations(prev => prev.map(c => c.id === selectedConversationId ? { ...c, messages: [...c.messages, { id: Date.now().toString(), sender: 'me', text, timestamp: Date.now() }] } : c));
      } else if (selectedItem) {
@@ -1087,7 +1043,6 @@ const App: React.FC = () => {
                  const start = args.startDate === 'now' ? Date.now() : (args.startDate ? new Date(args.startDate).getTime() : undefined);
                  const end = args.endDate === 'unknown' ? undefined : (args.endDate ? new Date(args.endDate).getTime() : undefined);
                  setTravelConfig({ isTravelMode: isActive, startDate: start, endDate: end });
-                 
                  const travelResponses: Record<string, string> = {
                      on: targetLang === 'zh-CN' ? '旅行模式已开启。祝您旅途愉快！' : "Travel mode ON. Have fun!",
                      off: targetLang === 'zh-CN' ? '欢迎回家！旅行模式已关闭，消耗恢复。' : "Welcome back! Travel mode OFF."
@@ -1098,7 +1053,7 @@ const App: React.FC = () => {
     } catch (e) { setQuickChatResponse("I can't hear you right now..."); } finally { setIsQuickChatLoading(false); setQuickChatInput(''); }
   };
 
-  if (step === 'voxel_forge') return <VoxelForgeView onBack={goHome} />;
+  if (step === 'voxel_forge') return <VoxelForgeView onBack={() => setStep('house_edit')} />;
   if (step === 'house_edit') return <HouseEditView inventory={inventory} onUpdateInventory={setInventory} onBack={goHome} currentLang={targetLang} onItemMove={handleItemMove} goToForge={() => setStep('voxel_forge')} butlerImage={butler.appearance.customAvatar} butlerScale={butler.appearance.scale} />;
 
   return (
@@ -1115,11 +1070,11 @@ const App: React.FC = () => {
             </div>
             
             <div className="flex-1 flex flex-col items-center">
-                <div className="relative w-full max-w-[320px] aspect-square mb-8 group"><div className="absolute -inset-1 bg-gradient-to-br from-purple-300 to-pink-300 rounded-[2.8rem] opacity-40 blur-md group-hover:opacity-60 transition-opacity"></div><div className="relative w-full h-full bg-[#05070a] rounded-[2.5rem] overflow-hidden shadow-2xl border-4 border-slate-900"><HouseView inventory={inventory} onRoomClick={(room) => { setSelectedRoom(room); setStep('inventory'); }} currentLang={targetLang} butlerMessage={butlerMessage} onDismissMessage={() => setButlerMessage(null)} onItemMove={handleItemMove} onAvatarClick={() => setIsQuickChatOpen(!isQuickChatOpen)} walkToRoom={walkToRoom} onDoubleClick={() => setStep('house_edit')} autoFit={true} butlerImage={butler.appearance.customAvatar} butlerScale={butler.appearance.scale} /></div><button onClick={() => setStep('voxel_forge')} className="absolute -right-2 -top-2 w-12 h-12 bg-slate-900 border-2 border-blue-500 rounded-2xl shadow-lg flex items-center justify-center text-blue-400 hover:text-white hover:scale-110 transition-all z-20" title="Voxel Forge 3D"><i className="fas fa-cube text-lg"></i></button></div>
+                <div className="relative w-full max-w-[320px] aspect-square mb-8 group"><div className="absolute -inset-1 bg-gradient-to-br from-purple-300 to-pink-300 rounded-[2.8rem] opacity-40 blur-md group-hover:opacity-60 transition-opacity"></div><div className="relative w-full h-full bg-[#05070a] rounded-[2.5rem] overflow-hidden shadow-2xl border-4 border-slate-900"><HouseView inventory={inventory} onRoomClick={(room) => { setSelectedRoom(room); setStep('inventory'); }} currentLang={targetLang} butlerMessage={butlerMessage} onDismissMessage={() => setButlerMessage(null)} onItemMove={handleItemMove} onAvatarClick={() => setIsQuickChatOpen(!isQuickChatOpen)} walkToRoom={walkToRoom} autoFit={true} butlerImage={butler.appearance.customAvatar} butlerScale={butler.appearance.scale} /></div><button onClick={() => setStep('house_edit')} className="absolute -right-2 -top-2 w-12 h-12 bg-slate-900 border-2 border-blue-500 rounded-2xl shadow-lg flex items-center justify-center text-blue-400 hover:text-white hover:scale-110 transition-all z-20" title="Warehouse"><i className="fas fa-warehouse text-lg"></i></button></div>
 
                 {isQuickChatOpen && (
                     <div className="w-full px-4 mb-4 z-50 animate-in slide-in-from-bottom duration-300">
-                        <div className="bg-white/95 backdrop-blur-xl border-2 border-pink-200 p-4 rounded-3xl shadow-2xl relative"><button onClick={() => setIsQuickChatOpen(false)} className="absolute -top-3 -right-3 w-8 h-8 bg-white border border-pink-100 rounded-full flex items-center justify-center text-pink-400 shadow-md z-10 hover:scale-110 transition-transform"><i className="fas fa-times"></i></button><div className="flex items-start gap-3 mb-3"><div className="w-10 h-10 bg-pink-100 rounded-full flex items-center justify-center border-2 border-white shadow-sm shrink-0 overflow-hidden">{butler.appearance.customAvatar ? <img src={butler.appearance.customAvatar} className="w-full h-full object-cover" alt="Avatar" /> : <div className="text-xl">👩‍🍳</div>}</div><div className="flex-1"><div className="text-[10px] font-black text-purple-400 uppercase tracking-widest mb-1">{butler.name}</div><div className="text-xs text-purple-800 font-medium leading-snug">{isQuickChatLoading ? <span className="animate-pulse">Thinking...</span> : (quickChatResponse || BUTLER_GREETINGS[targetLang])}</div></div></div><div className="flex items-center bg-purple-50 rounded-2xl p-1 pr-2 border border-purple-100"><input value={quickChatInput} onChange={(e) => setQuickChatInput(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleQuickChatSubmit()} placeholder="Ask about items or travel..." className="flex-1 bg-transparent px-3 py-2 text-xs font-bold text-purple-800 outline-none placeholder:text-purple-300" /><button onClick={toggleMapVoice} className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all mr-1 ${isMapVoiceActive ? 'bg-red-500 text-white animate-pulse' : 'bg-purple-100 text-purple-400 hover:bg-purple-200'}`}><i className={`fas ${isMapVoiceActive ? 'fa-stop' : 'fa-microphone'} text-[10px]`}></i></button><button onClick={handleQuickChatSubmit} className="w-8 h-8 bg-pink-500 rounded-xl text-white flex items-center justify-center shadow-lg shadow-pink-200 active:scale-90 transition-transform"><i className="fas fa-paper-plane text-[10px]"></i></button></div></div>
+                        <div className="bg-white/95 backdrop-blur-xl border-2 border-pink-200 p-4 rounded-3xl shadow-2xl relative"><button onClick={() => setIsQuickChatOpen(false)} className="absolute -top-3 -right-3 w-8 h-8 bg-white border border-pink-100 rounded-full flex items-center justify-center text-pink-400 shadow-md z-10 hover:scale-110 transition-transform"><i className="fas fa-times"></i></button><div className="flex items-start gap-3 mb-3"><div className="w-10 h-10 bg-pink-100 rounded-full flex items-center justify-center border-2 border-white shadow-sm shrink-0 overflow-hidden">{butler.appearance.customAvatar ? <img src={butler.appearance.customAvatar} className="w-full h-full object-cover" alt="Avatar" /> : <div className="text-xl">👩‍🍳</div>}</div><div className="flex-1"><div className="text-[10px] font-black text-purple-400 uppercase tracking-widest mb-1">{butler.name}</div><div className="text-xs text-purple-800 font-medium leading-snug">{isQuickChatLoading ? <span className="animate-pulse">Thinking...</span> : (quickChatResponse || BUTLER_GREETINGS[targetLang])}</div></div></div><div className="flex items-center bg-purple-50 rounded-2xl p-1 pr-2 border border-purple-100"><input value={quickChatInput} onChange={(e) => setQuickChatInput(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleQuickChatSubmit()} placeholder="Ask about items or travel..." className="flex-1 bg-transparent px-3 py-2 text-xs font-bold text-purple-800 outline-none placeholder:text-purple-300" /><button onClick={toggleMapVoice} className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all mr-1 ${isMapVoiceActive ? 'bg-red-500 text-white animate-pulse' : 'bg-purple-100 text-purple-400 hover:bg-purple-200'}`}><i className={`fas ${isMapVoiceActive ? 'fa-stop' : 'fa-microphone'} text-[10px]`}></i></button><button onClick={handleQuickChatSubmit} className="w-8 h-8 bg-pink-500 rounded-xl text-white flex items-center justify-center shadow-lg shadow-pink-200 active:scale-95 transition-transform"><i className="fas fa-paper-plane text-[10px]"></i></button></div></div>
                     </div>
                 )}
                {!isQuickChatOpen && <div className="w-full px-4 mb-8"><div className="bg-white/80 p-6 rounded-[2.5rem] shadow-md border border-purple-100 flex justify-around"><div className="text-center"><div className="text-2xl font-black text-purple-800">{effectiveInventory.length}</div><div className="text-[9px] text-purple-400 font-black uppercase tracking-widest mt-1">Total Items</div></div><div className="w-px h-full bg-purple-100"></div><div className="text-center"><div className="text-2xl font-black text-purple-800">¥{effectiveInventory.reduce((acc, curr) => acc + (curr.history[0]?.unitPrice || 0) * curr.currentQuantity, 0).toFixed(0)}</div><div className="text-[9px] text-purple-400 font-black uppercase tracking-widest mt-1">Est. Value</div></div></div></div>}
@@ -1153,13 +1108,19 @@ const App: React.FC = () => {
         {step === 'butler' && <ButlerView config={butler} onChange={setButler} onBack={goHome} inventory={inventory} addToInventory={addToInventory} targetLang={targetLang} onCook={handleRecipeCook} onFindItem={handleFindItem} onAddItemRequest={(name) => { setManualEntryInitialName(name || ''); setStep('manual_entry'); }} onConsumeItemRequest={handleConsumeItemRequest} travelConfig={travelConfig} onSetTravelConfig={setTravelConfig} />}
         {step === 'upload' && <div className="flex-1 flex flex-col pt-10"><div className="mb-10 text-center"><h2 className="text-3xl font-black text-purple-800 tracking-tight">{NAV_TEXT[targetLang].scan.toUpperCase()}</h2><p className="text-[10px] text-pink-500 font-black uppercase tracking-widest">{butler.name} is checking...</p></div><Uploader onImageSelect={processImage} isLoading={isLoading} currentLang={targetLang} /><button onClick={() => setStep('manual_entry')} className="mt-8 py-5 bg-white rounded-3xl text-xs font-black text-purple-800 uppercase border border-purple-100 shadow-sm">Manual Entry</button></div>}
         {step === 'manual_entry' && <ManualEntryView onBack={() => { setStep('upload'); setManualEntryInitialName(''); }} onSubmit={(items) => { addToInventory(items); setManualEntryInitialName(''); }} defaultRoom={selectedRoom} currentLang={targetLang} initialName={manualEntryInitialName} />}
-        {step === 'inventory' && selectedRoom && <div className="flex-1 flex flex-col h-full animate-in slide-in-from-right duration-300"><div className="flex justify-between items-center mb-4"><button onClick={goHome} className="w-10 h-10 bg-white rounded-xl shadow-sm text-purple-400 flex items-center justify-center"><i className="fas fa-chevron-left"></i></button><h2 className="text-xl font-black text-purple-800 uppercase tracking-widest">{selectedRoom}</h2><div className="w-10"></div></div><div className="relative w-full aspect-square bg-purple-50/50 rounded-[3rem] border border-purple-100 overflow-hidden shadow-inner mb-6"><HouseView key={selectedRoom} inventory={inventory} onRoomClick={() => {}} currentLang={targetLang} selectedRoom={selectedRoom} autoFit={true} butlerMessage={butlerMessage} onDismissMessage={() => setButlerMessage(null)} onItemMove={handleItemMove} butlerImage={butler.appearance.customAvatar} butlerScale={butler.appearance.scale} /></div><div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 pb-20"><h3 className="text-[10px] font-black text-pink-500 uppercase tracking-widest mb-2 px-2">Items stored here</h3>{effectiveInventory.filter(i => i.assignedRoom === selectedRoom && i.currentQuantity > 0).length === 0 ? <div className="text-center py-10 text-purple-300 text-xs">Empty Room (or items consumed)</div> : effectiveInventory.filter(i => i.assignedRoom === selectedRoom && i.currentQuantity > 0).map((item) => <div key={item.id} onClick={() => handleRoomItemClick(item)} className="bg-white p-4 rounded-2xl shadow-sm border border-purple-50 flex items-center justify-between cursor-pointer active:scale-95 transition-transform"><div className="flex items-center space-x-3"><div className="text-2xl">{item.voxelModel ? '🪑' : (item.photo ? <img src={item.photo} alt={item.name} className="w-8 h-8 object-cover rounded-lg border border-purple-100" /> : item.emoji)}</div><div><div className="text-xs font-black text-purple-800">{item.translatedName}</div><div className="flex items-center space-x-2"><div className="text-[9px] text-purple-400">Qty: {item.currentQuantity.toFixed(1)}</div>{item.consumption?.isEnabled && <div className="flex items-center space-x-1 px-1.5 py-0.5 bg-blue-50 rounded-full animate-pulse border border-blue-100"><i className="fas fa-arrow-down text-[6px] text-blue-500"></i><span className="text-[7px] font-bold text-blue-500 uppercase tracking-tight">Consuming</span></div>}</div></div></div><div className="flex flex-col items-end gap-1"><i className="fas fa-chevron-right text-purple-200 text-xs"></i>{item.marketStatus === 'selling' && <span className="text-[8px] font-bold text-pink-500 bg-pink-50 px-1.5 py-0.5 rounded-full uppercase">Selling</span>}{item.marketStatus === 'sold' && <span className="text-[8px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-full uppercase">Sold</span>}</div></div>)}</div></div>}
+        {step === 'inventory' && selectedRoom && <div className="flex-1 flex flex-col h-full animate-in slide-in-from-right duration-300"><div className="flex justify-between items-center mb-4"><button onClick={goHome} className="w-10 h-10 bg-white rounded-xl shadow-sm text-purple-400 flex items-center justify-center"><i className="fas fa-chevron-left"></i></button><h2 className="text-xl font-black text-purple-800 uppercase tracking-widest">{selectedRoom}</h2><div className="w-10"></div></div><div className="relative w-full aspect-square bg-purple-50/50 rounded-[3rem] border border-purple-100 overflow-hidden shadow-inner mb-6"><HouseView key={selectedRoom} inventory={inventory} onRoomClick={() => {}} currentLang={targetLang} selectedRoom={selectedRoom} autoFit={true} butlerMessage={butlerMessage} onDismissMessage={() => setButlerMessage(null)} onItemMove={handleItemMove} onAvatarClick={() => setIsQuickChatOpen(!isQuickChatOpen)} butlerImage={butler.appearance.customAvatar} butlerScale={butler.appearance.scale} /></div><div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 pb-20"><h3 className="text-[10px] font-black text-pink-500 uppercase tracking-widest mb-2 px-2">Items stored here</h3>{effectiveInventory.filter(i => i.assignedRoom === selectedRoom && i.currentQuantity > 0).length === 0 ? <div className="text-center py-10 text-purple-300 text-xs">Empty Room (or items consumed)</div> : effectiveInventory.filter(i => i.assignedRoom === selectedRoom && i.currentQuantity > 0).map((item) => <div key={item.id} onClick={() => handleRoomItemClick(item)} className="bg-white p-4 rounded-2xl shadow-sm border border-purple-50 flex items-center justify-between cursor-pointer active:scale-95 transition-transform"><div className="flex items-center space-x-3"><div className="text-2xl">{item.voxelModel ? '🪑' : (item.photo ? <img src={item.photo} alt={item.name} className="w-8 h-8 object-cover rounded-lg border border-purple-100" /> : item.emoji)}</div><div><div className="text-xs font-black text-purple-800">{item.translatedName}</div><div className="flex items-center space-x-2"><div className="text-[9px] text-purple-400">Qty: {item.currentQuantity.toFixed(1)}</div>{item.consumption?.isEnabled && <div className="flex items-center space-x-1 px-1.5 py-0.5 bg-blue-50 rounded-full animate-pulse border border-blue-100"><i className="fas fa-arrow-down text-[6px] text-blue-500"></i><span className="text-[7px] font-bold text-blue-500 uppercase tracking-tight">Consuming</span></div>}</div></div></div><div className="flex flex-col items-end gap-1"><i className="fas fa-chevron-right text-purple-200 text-xs"></i>{item.marketStatus === 'selling' && <span className="text-[8px] font-bold text-pink-500 bg-pink-50 px-1.5 py-0.5 rounded-full uppercase">Selling</span>}{item.marketStatus === 'sold' && <span className="text-[8px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-full uppercase">Sold</span>}</div></div>)}</div></div>}
         {step === 'item_detail' && selectedItem && <ItemDetailView item={selectedItem} targetLang={targetLang} viewMode={lastStep === 'plaza' ? 'market' : 'inventory'} onBack={() => setStep(lastStep === 'plaza' ? 'plaza' : (selectedRoom ? 'inventory' : 'home'))} onConsume={(q) => { setInventory(prev => prev.map(i => i.id === selectedItem.id ? {...i, currentQuantity: Math.max(0, i.currentQuantity - q)} : i)); setSelectedItem(prev => prev ? {...prev, currentQuantity: Math.max(0, prev.currentQuantity - q)} : null); }} onUpdate={(newItem) => { setInventory(prev => prev.map(i => i.id === newItem.id ? newItem : i)); setSelectedItem(prev => prev && prev.id === newItem.id ? newItem : prev); }} onPublishRequest={handlePublishToPlaza} onChatRequest={() => setStep('chat')} onMarkSold={handleMarkAsSold} onCancelListing={handleCancelListing} />}
         {step === 'chat' && selectedItem && <ChatView sellerName={selectedItem.sellerName || 'Seller'} itemName={selectedItem.translatedName} basePrice={selectedItem.priceTag || 0} targetLang={targetLang} onBack={() => { if (selectedConversationId) { setStep('inbox'); setSelectedConversationId(null); } else setStep('item_detail'); }} initialMessages={selectedConversationId ? conversations.find(c => c.id === selectedConversationId)?.messages : undefined} onMessageSent={handleMessageSent} />}
         {step === 'review' && ocrResult && (
             <div className="animate-in slide-in-from-bottom duration-500 flex flex-col flex-1 h-full relative">
                 <div className="bg-white rounded-[2.5rem] shadow-xl border border-purple-200 overflow-hidden flex flex-col flex-1">
-                    <div className="p-6 bg-purple-800 text-white flex justify-between items-center"><h3 className="font-black text-sm uppercase">AI Review</h3><button onClick={() => setStep('upload')}><i className="fas fa-times"></i></button></div>
+                    <div className="p-6 bg-purple-800 text-white flex justify-between items-center">
+                      <div className="flex items-center space-x-3">
+                        <h3 className="font-black text-sm uppercase">AI Review</h3>
+                      </div>
+                      <button onClick={() => setStep('upload')}><i className="fas fa-times"></i></button>
+                    </div>
+
                     <div className="px-6 pt-4 bg-slate-50/50"><label className="text-[10px] font-black text-purple-400 uppercase tracking-widest block mb-2">Purchase Date</label><input type="date" value={reviewDate} onChange={(e) => setReviewDate(e.target.value)} className="w-full bg-purple-50 border border-purple-100 rounded-xl p-3 text-sm font-bold text-purple-800 outline-none focus:border-pink-300" /></div>
                     <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50/50">
                         {ocrResult.items?.map((item, i) => (
@@ -1176,7 +1137,6 @@ const App: React.FC = () => {
                     <div className="p-8 bg-white border-t border-purple-50"><button onClick={() => addToInventory(ocrResult.items || [])} className="w-full py-5 bg-pink-500 text-white font-black rounded-2xl shadow-xl uppercase tracking-widest text-xs">Confirm & Add ({butler.personality === 'strict' ? 'Hmph!' : 'Done ✨'})</button></div>
                 </div>
 
-                {/* Sell Modal Overlay */}
                 {sellModalState && (
                     <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300">
                         <div className="bg-white w-full h-full max-h-full rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden relative">
