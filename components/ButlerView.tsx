@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { GoogleGenAI, Chat, GenerateContentResponse, FunctionCall, LiveServerMessage, Modality } from "@google/genai";
 import { OCRResult, ReceiptItem, processImageWithAI, LanguageCode, ButlerConfig, Personality, generateRecipes, Recipe, findItemTool, setTravelModeTool, addItemTool, consumeItemTool, TravelConfig } from '../services/geminiService';
@@ -99,7 +98,7 @@ const TEXT: Record<LanguageCode, any> = {
     'en': { chat: 'Chat', style: 'Style', scan: 'Scan', chef: 'Chef', placeholder: "Ask Alice... (e.g. 'Where is my camera?')", review: 'Review Items', confirm: 'Confirm', name: 'Name', personality: 'Personality', appearance: 'Appearance', eyes: 'Eyes', face: 'Face', customAvatar: 'Custom Avatar', uploadAvatar: 'Upload Image', scale: 'Avatar Scale', presets: 'Presets', voxel: 'Reset to Voxel' },
     'fr': { chat: 'Chat', style: 'Style', scan: 'Scan', chef: 'Chef', placeholder: 'Demandez à Alice...', review: 'Revisar', confirm: 'Confirmer', name: 'Nom', personality: 'Personnalité', appearance: 'Apparence', eyes: 'Yeux', face: 'Visage', customAvatar: 'Avatar Perso', uploadAvatar: 'Télécharger', scale: 'Taille Avatar', presets: 'Préréglages', voxel: 'Voxel 3D' },
     'ja': { chat: 'チャット', style: 'スタイル', scan: 'スキャン', chef: 'シェフ', placeholder: 'アリスに聞く... (例：カメラはどこ？)', review: '確認', confirm: '確定', name: '名前', personality: '性格', appearance: '外見', eyes: '目', face: '顔', customAvatar: 'カスタム画像', uploadAvatar: '画像をアップ', scale: 'サイズ', presets: 'プリセット', voxel: '3Dボクセル' },
-    'es': { chat: 'Chat', style: 'Estilo', scan: 'Escanear', chef: 'Chef', placeholder: 'Pregunta a Alice...', review: 'Revisar', confirm: 'Confirmar', name: 'Nombre', personality: 'Personalidad', appearance: 'Apparence', eyes: 'Ojos', face: 'Cara', customAvatar: 'Avatar Pers.', uploadAvatar: 'Subir Imagen', scale: 'Escala', presets: 'Preajustes', voxel: 'Voxel 3D' }
+    'es': { chat: 'Chat', style: 'Estilo', scan: 'Escanear', chef: 'Chef', placeholder: 'Pregunta a Alice...', review: 'Revisar', confirm: 'Confirmar', name: 'Nombre', personality: 'Personalidad', appearance: 'Apariencia', eyes: 'Ojos', face: 'Cara', customAvatar: 'Avatar Pers.', uploadAvatar: 'Subir Imagen', scale: 'Escala', presets: 'Preajustes', voxel: 'Voxel 3D' }
 };
 
 export const ButlerView: React.FC<ButlerViewProps> = ({ onBack, inventory, addToInventory, targetLang, config, onChange, onCook, onFindItem, onAddItemRequest, onConsumeItemRequest, travelConfig, onSetTravelConfig }) => {
@@ -334,22 +333,20 @@ export const ButlerView: React.FC<ButlerViewProps> = ({ onBack, inventory, addTo
     } catch (e) { setCurrentAiResponse("Failed."); } finally { if (isMounted.current) setIsChefLoading(false); }
   };
 
-  const handleAdjustIngredient = (recipeId: string, itemId: string, isIncrement: boolean) => {
+  const handleAdjustIngredient = (recipeId: string, itemId: string, delta: number) => {
     const key = `${recipeId}_${itemId}`;
-    const recipe = suggestedRecipes?.find(r => r.id === recipeId);
-    const ingredient = recipe?.ingredientsUsed.find(i => i.inventoryItemId === itemId);
-    if (!ingredient) return;
-
-    const baseAmount = Number(ingredient.quantityToConsume);
     const invItem = inventory.find(i => i.id === itemId);
     const maxQty = invItem ? invItem.currentQuantity : Infinity;
 
     setIngredientAdjustments(prev => {
-       const currentVal = prev[key] ?? baseAmount;
-       let nextVal = isIncrement ? currentVal + baseAmount : currentVal - baseAmount;
-       
-       nextVal = parseFloat(nextVal.toFixed(2));
-       // Limit to inventory stock
+       let curr = prev[key];
+       if (curr === undefined) {
+           const ing = suggestedRecipes?.find(r => r.id === recipeId)?.ingredientsUsed.find(i => i.inventoryItemId === itemId);
+           curr = ing ? ing.quantityToConsume : 1;
+       }
+       // Apply cap: clamp between 0 and max available stock
+       // Use delta of 1 for portion-based adjustments as per request
+       const nextVal = parseFloat((Number(curr) + delta).toFixed(2));
        return { ...prev, [key]: Math.min(maxQty, Math.max(0, nextVal)) };
     });
   };
@@ -425,84 +422,59 @@ export const ButlerView: React.FC<ButlerViewProps> = ({ onBack, inventory, addTo
         )}
       </div>
 
-      {/* Recipe Suggestion Modal */}
       {suggestedRecipes && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white p-6 rounded-[2.5rem] shadow-2xl border border-purple-200 w-full max-w-sm max-h-[80vh] flex flex-col">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-300">
+          <div className="bg-white p-6 rounded-[2.5rem] shadow-2xl border border-purple-200 w-full max-w-sm max-h-[85vh] flex flex-col">
              <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-black text-purple-800">Alice's Menu</h3>
-                <button onClick={() => setSuggestedRecipes(null)} className="w-8 h-8 flex items-center justify-center bg-purple-50 text-purple-400 rounded-full"><i className="fas fa-times"></i></button>
+                <button onClick={() => setSuggestedRecipes(null)} className="w-8 h-8 flex items-center justify-center bg-purple-50 text-purple-400 rounded-full active:scale-90 transition-transform"><i className="fas fa-times"></i></button>
              </div>
-             
              <div className="flex-1 overflow-y-auto custom-scrollbar space-y-4 pr-1">
                 {suggestedRecipes.map((recipe) => (
                    <div key={recipe.id} className="bg-purple-50 p-4 rounded-2xl border border-purple-100 flex flex-col gap-2">
-                       <div className="flex items-start justify-between">
-                           <div className="flex items-center gap-2">
-                               <span className="text-2xl">{recipe.emoji || '🍽️'}</span>
-                               <div>
-                                   <div className="font-black text-purple-800 text-sm">{recipe.name}</div>
-                                   <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase ${recipe.difficulty === 'Easy' ? 'bg-green-100 text-green-600' : recipe.difficulty === 'Medium' ? 'bg-yellow-100 text-yellow-600' : 'bg-red-100 text-red-600'}`}>
-                                       {recipe.difficulty}
-                                   </span>
-                               </div>
-                           </div>
+                       <div className="flex items-center gap-2 mb-1">
+                           <span className="text-2xl">{recipe.emoji || '🍽️'}</span>
+                           <div className="font-black text-purple-800 text-sm">{recipe.name}</div>
                        </div>
-                       
-                       <p className="text-[10px] text-purple-600 italic leading-relaxed bg-white/50 p-2 rounded-lg">
-                           "{recipe.description}"
-                       </p>
-
-                       {/* Instructions Section */}
-                       <div className="mt-1">
-                           <div className="text-[9px] font-black text-purple-400 uppercase tracking-widest mb-1">Method:</div>
-                           <ol className="list-decimal list-inside space-y-1">
-                               {recipe.instructions?.map((step, i) => (
-                                   <li key={i} className="text-[9px] text-purple-800 font-medium leading-snug pl-1">
-                                       {step}
-                                   </li>
-                               ))}
-                           </ol>
-                       </div>
-                       
-                       <div className="mt-1">
-                           <div className="text-[9px] font-black text-purple-400 uppercase tracking-widest mb-1">Ingredients to Use:</div>
-                           <div className="flex flex-col gap-1.5">
-                               {recipe.ingredientsUsed.map((ing, i) => {
-                                   const key = `${recipe.id}_${ing.inventoryItemId}`;
-                                   const currentQty = ingredientAdjustments[key] !== undefined ? ingredientAdjustments[key] : ing.quantityToConsume;
-                                   
-                                   return (
-                                     <div key={i} className="flex justify-between items-center bg-white border border-purple-100 px-3 py-2 rounded-lg">
-                                         <span className="text-[9px] font-bold text-purple-700">{ing.name}</span>
-                                         <div className="flex items-center space-x-2">
-                                            <button 
-                                              onClick={() => handleAdjustIngredient(recipe.id, ing.inventoryItemId, -1)}
-                                              className="w-5 h-5 bg-purple-50 rounded-full flex items-center justify-center text-purple-400 hover:bg-purple-100"
-                                            >
-                                                <i className="fas fa-minus text-[8px]"></i>
-                                            </button>
-                                            <span className="text-xs font-black text-purple-800 w-4 text-center">{currentQty}</span>
-                                            <button 
-                                              onClick={() => handleAdjustIngredient(recipe.id, ing.inventoryItemId, 1)}
-                                              className="w-5 h-5 bg-purple-50 rounded-full flex items-center justify-center text-purple-400 hover:bg-purple-100"
-                                            >
-                                                <i className="fas fa-plus text-[8px]"></i>
-                                            </button>
-                                         </div>
+                       <p className="text-[10px] text-purple-600 italic mb-2 leading-relaxed">"{recipe.description}"</p>
+                       <div className="space-y-2">
+                           <div className="text-[9px] font-black text-purple-400 uppercase tracking-widest">Ingredients & Adjustment:</div>
+                           {recipe.ingredientsUsed.map((ing, i) => {
+                               const key = `${recipe.id}_${ing.inventoryItemId}`;
+                               const cur = ingredientAdjustments[key] ?? ing.quantityToConsume;
+                               const inv = inventory.find(v => v.id === ing.inventoryItemId);
+                               const maxAvailable = inv ? inv.currentQuantity : 0;
+                               
+                               return (
+                                 <div key={i} className="flex justify-between items-center bg-white border border-purple-100 px-3 py-2 rounded-xl">
+                                     <div className="flex flex-col flex-1 min-w-0">
+                                         <span className="text-[10px] font-bold text-purple-700 truncate">{ing.name}</span>
+                                         <span className="text-[7px] font-black text-purple-300 uppercase">Stock: {maxAvailable.toFixed(1)}</span>
                                      </div>
-                                   );
-                               })}
-                           </div>
+                                     <div className="flex items-center gap-2">
+                                        <div className="flex items-center bg-purple-50 rounded-lg p-0.5 border border-purple-100">
+                                            <button 
+                                              onClick={() => handleAdjustIngredient(recipe.id, ing.inventoryItemId, -1)} 
+                                              className="w-7 h-7 flex items-center justify-center text-purple-400 active:bg-purple-100 rounded-md transition-all"
+                                            >
+                                              <i className="fas fa-minus text-[10px]"></i>
+                                            </button>
+                                            <span className={`text-xs font-black w-8 text-center ${cur >= maxAvailable && maxAvailable > 0 ? 'text-pink-500' : 'text-purple-800'}`}>{cur}</span>
+                                            <button 
+                                              onClick={() => handleAdjustIngredient(recipe.id, ing.inventoryItemId, 1)} 
+                                              className="w-7 h-7 flex items-center justify-center text-purple-400 active:bg-purple-100 rounded-md transition-all disabled:opacity-30"
+                                              disabled={cur >= maxAvailable}
+                                            >
+                                              <i className="fas fa-plus text-[10px]"></i>
+                                            </button>
+                                        </div>
+                                        <span className="text-[9px] font-black text-purple-300 w-6 uppercase">{inv?.unit}</span>
+                                     </div>
+                                 </div>
+                               );
+                           })}
                        </div>
-                       
-                       <button 
-                         onClick={() => handleCookRecipe(recipe)}
-                         className="mt-3 w-full py-3 bg-orange-400 text-white font-black rounded-xl shadow-md active:scale-95 transition-all text-xs flex items-center justify-center gap-2"
-                       >
-                           <i className="fas fa-fire-burner"></i>
-                           <span>Cook & Consume</span>
-                       </button>
+                       <button onClick={() => handleCookRecipe(recipe)} className="mt-4 w-full py-3.5 bg-orange-400 text-white font-black rounded-2xl shadow-lg active:scale-95 transition-all text-xs flex items-center justify-center gap-2"><i className="fas fa-fire-burner"></i><span>Cook & Consume</span></button>
                    </div>
                 ))}
              </div>
