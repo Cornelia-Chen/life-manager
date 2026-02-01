@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { GoogleGenAI, GenerateContentResponse, LiveServerMessage, Modality } from "@google/genai";
 import { Layout } from './components/Layout';
@@ -103,6 +104,7 @@ const App: React.FC = () => {
   const [selectedItem, setSelectedItem] = useState<ReceiptItem | null>(null);
   const [ocrResult, setOcrResult] = useState<OCRResult | null>(null);
   const [reviewDate, setReviewDate] = useState<string>(''); 
+  const [showFullText, setShowFullText] = useState(false);
   
   // Sell Modal State for Review Step
   const [sellModalState, setSellModalState] = useState<{ index: number; ad: string; price: string; loading: boolean } | null>(null);
@@ -177,6 +179,7 @@ const App: React.FC = () => {
         eyes: 'large', 
         body: 'chibi', 
         outfit: 'casual',
+        /* Fix: corrected DEFAULT_CUSTOM_AV4TAR to DEFAULT_CUSTOM_AVATAR to fix reference error */
         customAvatar: DEFAULT_CUSTOM_AVATAR || undefined,
         scale: 0.8 
     }
@@ -489,6 +492,7 @@ const App: React.FC = () => {
   const processImage = useCallback(async (file: File, mode: ScanMode) => {
     setIsLoading(true);
     setError(null);
+    setShowFullText(false);
     try {
       const base64Promise = new Promise<string>((resolve) => {
         const r = new FileReader();
@@ -1122,7 +1126,9 @@ const App: React.FC = () => {
                       <div className="flex items-center space-x-3">
                         <h3 className="font-black text-sm uppercase">AI Review</h3>
                       </div>
-                      <button onClick={() => setStep('upload')}><i className="fas fa-times"></i></button>
+                      <div className="flex items-center space-x-4">
+                        <button onClick={() => setStep('upload')}><i className="fas fa-times"></i></button>
+                      </div>
                     </div>
 
                     <div className="px-6 pt-4 bg-slate-50/50"><label className="text-[10px] font-black text-purple-400 uppercase tracking-widest block mb-2">Purchase Date</label><input type="date" value={reviewDate} onChange={(e) => setReviewDate(e.target.value)} className="w-full bg-purple-50 border border-purple-100 rounded-xl p-3 text-sm font-bold text-purple-800 outline-none focus:border-pink-300" /></div>

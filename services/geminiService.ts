@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type, FunctionDeclaration } from "@google/genai";
 import { VoxelModel } from "./voxelTypes";
 
@@ -88,22 +89,24 @@ export async function processImageWithAI(base64Data: string, mimeType: string, l
   
   const prompt = isSingle 
     ? `TASK: 
-       Identify object. Return JSON:
+       Identify object and extract any visible text on it. Return JSON:
        {
          "items": [{"name": string, "emoji": string, "quantity": number, "price": number, "unit": string, "assignedRoom": string}],
+         "fullText": "the raw text recognized from the image",
          "purchaseDate": "YYYY-MM-DD"
        }
-       Translate to ${lang}.`
+       Translate items to ${lang}.`
     : `TASK:
-       Receipt OCR. FASTEST RESPONSE ONLY.
+       Receipt OCR. Extract items AND provide the full raw text recognized.
        IMPORTANT: If an item is a multipack or set (套盒), extract the individual unit count. 
        Example: "Yogurt 6x100g" should result in quantity: 6, unit: "bottle" or similar.
        JSON FORMAT:
        {
          "items": [{"name": string, "emoji": string, "quantity": number, "price": number, "unit": string}],
+         "fullText": "the complete raw text found on the receipt",
          "purchaseDate": "YYYY-MM-DD"
        }
-       Translate to ${lang}. Skip all meta text.`;
+       Translate items to ${lang}. Skip all meta text in items, but include it in fullText.`;
 
   try {
     const text = await safeGenAIRequest(
@@ -123,7 +126,7 @@ export async function processImageWithAI(base64Data: string, mimeType: string, l
       items, 
       purchaseDate: json.purchaseDate, 
       rawText: text,
-      fullText: "" 
+      fullText: json.fullText || "" 
     };
   } catch (e: any) { return { items: [], rawText: e.toString() }; }
 }
