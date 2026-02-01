@@ -14,8 +14,9 @@ export const luxuryKitchenSuite: VoxelModel = {
     "H": "#808080", // 抽油煙機
     "G": "#ADD8E6", // 吊櫃玻璃
     "R": "#DCDCDC", // 冰箱門縫/手把
-    "B": "#0099FF"  // 火焰藍
-    "F": "#FF4500", // 火焰橙色
+    "B": "#0099FF",  // 火焰藍
+    /* Fixed missing comma below */
+    "F": "#FF4500" // 火焰橙色
   },
   "layers": [
     // Layer 0-14: 底層地櫃與冰箱主體

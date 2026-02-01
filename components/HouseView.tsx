@@ -477,7 +477,7 @@ export const HouseView: React.FC<HouseViewProps> = ({
 
         {inventory.map((item) => {
             if (!item.showOnMap) return null;
-            if (item.currentQuantity <= 0.001) return null;
+            if (item.currentQuantity <= 0) return null;
             if (selectedRoom && item.assignedRoom !== selectedRoom) return null; 
             return (
               <FurnitureStack 

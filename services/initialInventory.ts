@@ -272,9 +272,9 @@ export const INITIAL_INVENTORY: ReceiptItem[] = [
     voxelModel: modernRefrigerator as unknown as VoxelModel
   },
   {
-    id: 'default1-Wardrobe',
-    name: 'standard Wardrobe',
-    translatedName: '木衣櫃',
+    id: 'default-Wardrobe',
+    name: 'Minimalist Wardrobe',
+    translatedName: '木製衣櫃',
     emoji: '👚',
     unit: '個',
     assignedRoom: 'cloakroom',

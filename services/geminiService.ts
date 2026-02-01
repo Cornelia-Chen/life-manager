@@ -51,7 +51,7 @@ async function safeGenAIRequest(
         });
 
         const text = response.text || "";
-        // 清理 AI 可能夹带的 Markdown 代码塊
+        // Clean up potential markdown blocks
         return text.replace(/```json/g, "").replace(/```/g, "").trim();
       } catch (error: any) {
         const isQuotaError = error.message?.includes('429') || error.message?.includes('quota');
@@ -69,7 +69,7 @@ async function safeGenAIRequest(
 
 export interface ConsumptionConfig { isEnabled: boolean; amount: number; frequency: 'day' | 'week' | 'month' | 'year'; lastCalculated: number; }
 export interface PurchaseRecord { timestamp: number; quantity: number; unitPrice: number; }
-export interface ReceiptItem { id: string; originalItemId?: string; name: string; translatedName: string; emoji: string; unit: string; assignedRoom: RoomType; history: PurchaseRecord[]; currentQuantity: number; photo?: string; voxelModel?: VoxelModel; alertType?: AlertType; lowStockThreshold?: number; expirationDate?: number; consumption?: ConsumptionConfig; showOnMap?: boolean; position?: { x: number; y: number }; rotation?: number; scale?: number; heightScale?: number; elevation?: number; sellerName?: string; priceTag?: number; description?: string; isPublic?: boolean; marketStatus?: 'selling' | 'sold'; }
+export interface ReceiptItem { id: string; originalItemId?: string; name: string; translatedName: string; emoji: string; unit: string; assignedRoom: RoomType; history: PurchaseRecord[]; currentQuantity: number; photo?: string; voxelModel?: VoxelModel; alertType?: AlertType; lowStockThreshold?: number; expirationDate?: number; consumption?: ConsumptionConfig; showOnMap?: boolean; position?: { x: number; y: number }; rotation?: number; scale?: number; heightScale?: number; elevation?: number; sellerName?: string; priceTag?: number; description?: string; isPublic?: boolean; marketStatus?: 'selling' | 'sold'; category?: string; }
 export interface OCRResult { items: Partial<ReceiptItem & { price: number; quantity: number; consumptionRate?: number; consumptionFreq?: string; isSelling?: boolean; askingPrice?: number }>[]; purchaseDate?: string; rawText?: string; fullText?: string; }
 export interface TravelConfig { isTravelMode: boolean; startDate?: number; endDate?: number; }
 export interface ButlerConfig { name: string; personality: Personality; appearance: { face: string; eyes: string; body: string; outfit: string; customAvatar?: string; scale?: number; }; customPrompt?: string; }
@@ -88,22 +88,32 @@ export async function processImageWithAI(base64Data: string, mimeType: string, l
   
   const prompt = isSingle 
     ? `TASK: 
-       Identify object. Return JSON:
+       Identify object. Categorize strictly:
+       - "food": Edible raw ingredients or cooked food.
+       - "appliance": Fridge, microwave, stove, etc.
+       - "household": Bags, cleaning tools, furniture.
+       - "medicine": Lozenges, pills, medical supplies.
+       - "other": Misc.
+       Return JSON:
        {
-         "items": [{"name": string, "emoji": string, "quantity": number, "price": number, "unit": string, "assignedRoom": string}],
+         "items": [{"name": string, "emoji": string, "quantity": number, "price": number, "unit": string, "assignedRoom": string, "category": string}],
          "purchaseDate": "YYYY-MM-DD"
        }
-       Translate to ${lang}.`
+       Translate names to ${lang}.`
     : `TASK:
-       Receipt OCR. FASTEST RESPONSE ONLY.
-       IMPORTANT: If an item is a multipack or set (套盒), extract the individual unit count. 
-       Example: "Yogurt 6x100g" should result in quantity: 6, unit: "bottle" or similar.
+       Receipt OCR. Extract ALL items and categorize them:
+       - "food": ONLY edible ingredients/food items.
+       - "household": Paper towels, plastic bags, soap, etc.
+       - "appliance": Kitchen electronics/hardware.
+       - "medicine": Medical supplies, throat lozenges.
+       - "other": Meta-items or misc.
+       IMPORTANT: If an item is a multipack, extract unit count.
        JSON FORMAT:
        {
-         "items": [{"name": string, "emoji": string, "quantity": number, "price": number, "unit": string}],
+         "items": [{"name": string, "emoji": string, "quantity": number, "price": number, "unit": string, "category": string}],
          "purchaseDate": "YYYY-MM-DD"
        }
-       Translate to ${lang}. Skip all meta text.`;
+       Translate names to ${lang}.`;
 
   try {
     const text = await safeGenAIRequest(
@@ -136,23 +146,32 @@ export async function predictEmoji(name: string): Promise<string> {
 }
 
 export async function generateRecipes(inventory: ReceiptItem[], lang: LanguageCode, personality: Personality): Promise<Recipe[]> {
+    // Strictly filter for food items and exclude common non-edibles
+    const NON_FOOD_KEYWORDS = /冰箱|洗衣机|微波炉|塑料袋|垃圾袋|润喉糖|感冒药|药|柜|架|机/i;
+    
     const availableItems = inventory
-        .filter(i => i.currentQuantity > 0)
+        .filter(i => {
+            const isFoodCategory = i.category === 'food';
+            const isNotHardware = !NON_FOOD_KEYWORDS.test(i.translatedName) && !NON_FOOD_KEYWORDS.test(i.name);
+            return i.currentQuantity > 0 && isFoodCategory && isNotHardware;
+        })
         .map(i => `${i.translatedName} (ID: ${i.id}, Unit: ${i.unit})`)
         .join(', ');
         
-    const prompt = `Task: Suggest 3 creative recipes.
-    Ingredients provided (including their entry units): ${availableItems}
+    if (!availableItems) return [];
+
+    const prompt = `Task: Suggest 3 creative recipes using ONLY the edible ingredients provided.
+    Ingredients available: ${availableItems}
     
-    IMPORTANT RULES:
-    1. Filter out NON-FOOD items.
-    2. EDIBLE only.
-    3. MANDATORY: The 'quantityToConsume' MUST use the EXACT SAME 'Unit' as listed for that ingredient in the input. 
-    Example: if Milk is in 'bottle', consume '0.5 bottle', NOT '500ml'.
+    STRICT RULES:
+    1. ONLY use items from the list above. 
+    2. ABSOLUTELY DO NOT use appliances (fridge, microwave), medicine, or packaging as ingredients.
+    3. The 'quantityToConsume' MUST use the EXACT SAME 'Unit' as listed for that ingredient. 
     4. Language: ${lang}.
     5. Personality: ${personality}.
     
-    Return JSON: [{ id, name, emoji, difficulty, description, instructions: string[], ingredientsUsed: [{ inventoryItemId, name, quantityToConsume }] }]`;
+    Return JSON: [{ "id": string, "name": string, "emoji": string, "difficulty": "Easy"|"Medium"|"Hard", "description": string, "instructions": string[], "ingredientsUsed": [{ "inventoryItemId": string, "name": string, "quantityToConsume": number }] }]`;
+    
     try {
         const text = await safeGenAIRequest([{ text: prompt }], { responseMimeType: 'application/json' });
         return JSON.parse(text || '[]');
@@ -165,20 +184,18 @@ export async function generateSaleAd(item: Partial<ReceiptItem>, lang: LanguageC
         Role: A charismatic influencer/professional salesperson.
         Requirements:
         1. Catchy headline with emojis.
-        2. Emotional hook (why this is great).
-        3. Clear details on benefits and quality.
-        4. Professional call to action.
-        5. Tone: Energetic and trustworthy.
-        6. Language: ${lang}.
-        7. Format: Clean text, NO markdown code blocks.`;
+        2. Emotional hook.
+        3. Tone: Energetic and trustworthy.
+        4. Language: ${lang}.
+        5. Format: Clean text, NO markdown.`;
         
         return await safeGenAIRequest([{ text: prompt }], { maxOutputTokens: 600, temperature: 0.9 });
-    } catch { return "Grab this amazing deal! Great condition and perfect for your home. ✨"; }
+    } catch { return "Grab this amazing deal! ✨"; }
 }
 
 export async function analyzeHaggling(message: string, basePrice: number, lang: LanguageCode = 'zh-CN'): Promise<string> {
     try {
-        return await safeGenAIRequest([{ text: `Analyze buyer message: "${message}". Base: ${basePrice}. Lang: ${lang}. Max 15 words.` }], { maxOutputTokens: 5 });
+        return await safeGenAIRequest([{ text: `Analyze buyer message: "${message}". Base: ${basePrice}. Lang: ${lang}. Max 15 words.` }], { maxOutputTokens: 50 });
     } catch { return ""; }
 }
 
@@ -198,10 +215,7 @@ Rules:
 1. "rows" array length must equal "gridSize".
 2. Each string in "rows" must have exactly "gridSize" characters.
 3. Use "." for empty cells.
-4. Layers index 0 is the BASE (bottom).
-5. Ensure structural integrity (legs should be on bottom layers).
-6. FOR FURNITURE: Leave space between legs. Table tops should be thin layers.
-7. NEVER truncate the JSON. Output the complete object.`;
+4. Layers index 0 is the BASE (bottom).`;
 
 export async function generateVoxelModel(prompt: string, gridSize: number, layerCount: number, symmetry: boolean, axialSymmetry: boolean, imageBase64?: string): Promise<VoxelModel> {
   const userPrompt = `Task: Create a 3D voxel model for "${prompt}". 
@@ -209,9 +223,8 @@ export async function generateVoxelModel(prompt: string, gridSize: number, layer
   - Grid Size: ${gridSize}x${gridSize}
   - Target Layers: ${layerCount}
   - Symmetry: ${symmetry ? 'Bilateral' : 'None'}
-  - Axial Symmetry: ${axialSymmetry ? 'Enabled' : 'Disabled'}
   
-  Reminder: Furniture must have hollow spaces and accurate legs. Do not fill everything.`;
+  Furniture must have hollow spaces and accurate legs. Do not fill everything.`;
 
   const parts: any[] = [{ text: userPrompt }];
   if (imageBase64) parts.unshift({ inlineData: { mimeType: 'image/jpeg', data: imageBase64 } });
