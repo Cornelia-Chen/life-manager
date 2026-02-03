@@ -1,4 +1,5 @@
-import { ReceiptItem } from './geminiService';
+
+import { ReceiptItem, LanguageCode } from './geminiService';
 import { VoxelModel } from './voxelTypes';
 import { bathroomVanity } from './blueprints/bathroomVanity';
 import { sofa } from './blueprints/sofa';
@@ -15,11 +16,124 @@ import { studyDesk } from './blueprints/studyDesk';
 import { simpleToilet } from './blueprints/simpleToilet'; 
 import { chair } from './blueprints/chair'; 
 
+export const FURNITURE_TRANSLATIONS: Record<LanguageCode, Record<string, string>> = {
+  'zh-CN': {
+    'default-Bed': '双人床',
+    'default-StudyDesk': '书桌',
+    'default-chair': '椅子',
+    'default-Table': '茶几',
+    'default-Bedsidetable': '左床头柜',
+    'default1-Bedsidetable': '右床头柜',
+    'default-lamp': '左台灯',
+    'default-Bedsidelamp': '右台灯',
+    'default-sofa': '主沙发',
+    'default1-sofa': '单人位A',
+    'default2-sofa': '单人位B',
+    'default-wasthsink': '洗手台',
+    'default-Toilet': '马桶',
+    'default-kitchenStuie': '集成厨房',
+    'default-Refrigerator': '冰箱',
+    'default1-Wardrobe': '白色衣柜',
+    'default-Wardrobe': '木质衣柜',
+    'default-TV Stand': '电视柜',
+    'default-TV': '智能电视',
+    'default-Bathtub': '淋浴浴缸'
+  },
+  'en': {
+    'default-Bed': 'Double Bed',
+    'default-StudyDesk': 'Study Desk',
+    'default-chair': 'Chair',
+    'default-Table': 'Coffee Table',
+    'default-Bedsidetable': 'Left Nightstand',
+    'default1-Bedsidetable': 'Right Nightstand',
+    'default-lamp': 'Left Lamp',
+    'default-Bedsidelamp': 'Right Lamp',
+    'default-sofa': 'Main Sofa',
+    'default1-sofa': 'Armchair A',
+    'default2-sofa': 'Armchair B',
+    'default-wasthsink': 'Vanity Sink',
+    'default-Toilet': 'Toilet',
+    'default-kitchenStuie': 'Kitchen Suite',
+    'default-Refrigerator': 'Fridge',
+    'default1-Wardrobe': 'White Wardrobe',
+    'default-Wardrobe': 'Wood Wardrobe',
+    'default-TV Stand': 'TV Stand',
+    'default-TV': 'Smart TV',
+    'default-Bathtub': 'Shower Tub'
+  },
+  'fr': {
+    'default-Bed': 'Lit Double',
+    'default-StudyDesk': 'Bureau',
+    'default-chair': 'Chaise',
+    'default-Table': 'Table Basse',
+    'default-Bedsidetable': 'Table de Chevet G',
+    'default1-Bedsidetable': 'Table de Chevet D',
+    'default-lamp': 'Lampe G',
+    'default-Bedsidelamp': 'Lampe D',
+    'default-sofa': 'Canapé Principal',
+    'default1-sofa': 'Fauteuil A',
+    'default2-sofa': 'Fauteuil B',
+    'default-wasthsink': 'Lavabo',
+    'default-Toilet': 'Toilettes',
+    'default-kitchenStuie': 'Cuisine Intégrée',
+    'default-Refrigerator': 'Réfrigérateur',
+    'default1-Wardrobe': 'Armoire Blanche',
+    'default-Wardrobe': 'Armoire en Bois',
+    'default-TV Stand': 'Meuble TV',
+    'default-TV': 'Téléviseur',
+    'default-Bathtub': 'Baignoire Douche'
+  },
+  'ja': {
+    'default-Bed': 'ダブルベッド',
+    'default-StudyDesk': '学習机',
+    'default-chair': '椅子',
+    'default-Table': 'ローテーブル',
+    'default-Bedsidetable': 'サイドテーブル左',
+    'default1-Bedsidetable': 'サイドテーブル右',
+    'default-lamp': 'ランプ左',
+    'default-Bedsidelamp': 'ランプ右',
+    'default-sofa': 'メインソファ',
+    'default1-sofa': 'アームチェアA',
+    'default2-sofa': 'アームチェアB',
+    'default-wasthsink': '洗面台',
+    'default-Toilet': 'トイレ',
+    'default-kitchenStuie': 'システムキッチン',
+    'default-Refrigerator': '冷蔵庫',
+    'default1-Wardrobe': '白いワードローブ',
+    'default-Wardrobe': '木製ワードローブ',
+    'default-TV Stand': 'テレビ台',
+    'default-TV': 'テレビ',
+    'default-Bathtub': 'シャワー浴槽'
+  },
+  'es': {
+    'default-Bed': 'Cama Doble',
+    'default-StudyDesk': 'Escritorio',
+    'default-chair': 'Silla',
+    'default-Table': 'Mesa de Centro',
+    'default-Bedsidetable': 'Mesita de Noche I',
+    'default1-Bedsidetable': 'Mesita de Noche D',
+    'default-lamp': 'Lámpara I',
+    'default-Bedsidelamp': 'Lámpara D',
+    'default-sofa': 'Sofá Principal',
+    'default1-sofa': 'Sillón A',
+    'default2-sofa': 'Sillón B',
+    'default-wasthsink': 'Lavabo',
+    'default-Toilet': 'Inodoro',
+    'default-kitchenStuie': 'Cocina Integrada',
+    'default-Refrigerator': 'Nevera',
+    'default1-Wardrobe': 'Armario Blanco',
+    'default-Wardrobe': 'Armario de Madera',
+    'default-TV Stand': 'Mueble TV',
+    'default-TV': 'Televisión',
+    'default-Bathtub': 'Bañera Ducha'
+  }
+};
+
 export const INITIAL_INVENTORY: ReceiptItem[] = [
   {
     id: 'default-Bed',
     name: 'Standard Bed',
-    translatedName: '床',
+    translatedName: '双人床',
     emoji: '🛏️',
     unit: '張',
     assignedRoom: 'bedroom',
@@ -36,7 +150,7 @@ export const INITIAL_INVENTORY: ReceiptItem[] = [
   {
     id: 'default-StudyDesk',
     name: 'Study Desk',
-    translatedName: '學習桌',
+    translatedName: '学习桌',
     emoji: '✏️',
     unit: '張',
     assignedRoom: 'bedroom',
@@ -87,7 +201,7 @@ export const INITIAL_INVENTORY: ReceiptItem[] = [
   {
     id: 'default-Bedsidetable',
     name: 'Bedside Table',
-    translatedName: '床頭櫃',
+    translatedName: '床头柜',
     emoji: '🛏️',
     unit: '張',
     assignedRoom: 'bedroom',
@@ -104,7 +218,7 @@ export const INITIAL_INVENTORY: ReceiptItem[] = [
   {
     id: 'default1-Bedsidetable',
     name: 'Bedside mini Table',
-    translatedName: '小床頭櫃',
+    translatedName: '小床头柜',
     emoji: '🛏️',
     unit: '張',
     assignedRoom: 'bedroom',
@@ -121,7 +235,7 @@ export const INITIAL_INVENTORY: ReceiptItem[] = [
   {
     id: 'default-lamp',
     name: 'Bedside lamp',
-    translatedName: '床頭燈',
+    translatedName: '床头灯',
     emoji: '💡',
     unit: '台',
     assignedRoom: 'bedroom',
@@ -138,7 +252,7 @@ export const INITIAL_INVENTORY: ReceiptItem[] = [
   {
     id: 'default-Bedsidelamp',
     name: 'Bedside mini lamp',
-    translatedName: '小床頭燈',
+    translatedName: '小床头灯',
     emoji: '💡',
     unit: '台',
     assignedRoom: 'bedroom',
@@ -155,7 +269,7 @@ export const INITIAL_INVENTORY: ReceiptItem[] = [
   {
     id: 'default-sofa',
     name: 'Lux Sofa',
-    translatedName: '沙發',
+    translatedName: '沙发',
     emoji: '🛋️',
     unit: '張',
     assignedRoom: 'living',
@@ -172,7 +286,7 @@ export const INITIAL_INVENTORY: ReceiptItem[] = [
   {
     id: 'default1-sofa',
     name: 'Single Sofa',
-    translatedName: '單人沙發',
+    translatedName: '单人沙发',
     emoji: '🛋️',
     unit: '張',
     assignedRoom: 'living',
@@ -189,7 +303,7 @@ export const INITIAL_INVENTORY: ReceiptItem[] = [
   {
     id: 'default2-sofa',
     name: 'Single preson Sofa',
-    translatedName: '單沙發',
+    translatedName: '单沙发',
     emoji: '🛋️',
     unit: '張',
     assignedRoom: 'living',
@@ -223,7 +337,7 @@ export const INITIAL_INVENTORY: ReceiptItem[] = [
   {
     id: 'default-Toilet',
     name: 'Simple Toilet',
-    translatedName: '馬桶',
+    translatedName: '马桶',
     emoji: '🚽',
     unit: '個',
     assignedRoom: 'bathroom',
@@ -274,7 +388,7 @@ export const INITIAL_INVENTORY: ReceiptItem[] = [
   {
     id: 'default1-Wardrobe',
     name: 'standard Wardrobe',
-    translatedName: '白衣櫃',
+    translatedName: '白衣柜',
     emoji: '👚',
     unit: '個',
     assignedRoom: 'cloakroom',
@@ -291,7 +405,7 @@ export const INITIAL_INVENTORY: ReceiptItem[] = [
   {
     id: 'default-Wardrobe',
     name: 'Minimalist Wardrobe',
-    translatedName: '木製衣櫃',
+    translatedName: '木制衣柜',
     emoji: '👚',
     unit: '個',
     assignedRoom: 'cloakroom',
@@ -308,7 +422,7 @@ export const INITIAL_INVENTORY: ReceiptItem[] = [
   {
     id: 'default-TV Stand',
     name: 'Minimalist TV Stand',
-    translatedName: '電視櫃',
+    translatedName: '电视柜',
     emoji: '🔲',
     unit: '台',
     assignedRoom: 'living',
@@ -325,7 +439,7 @@ export const INITIAL_INVENTORY: ReceiptItem[] = [
   {
     id: 'default-TV',
     name: 'standard TV',
-    translatedName: '電視',
+    translatedName: '电视',
     emoji: '📺',
     unit: '台',
     assignedRoom: 'living',
