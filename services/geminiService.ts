@@ -32,7 +32,7 @@ async function safeGenAIRequest(
   config: any = {}, 
   systemInstruction?: string
 ): Promise<string> {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY });
   const modelsToTry = [PRIMARY_MODEL, BACKUP_MODEL];
   
   for (const modelName of modelsToTry) {
