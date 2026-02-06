@@ -22,7 +22,7 @@ As someone who has lived a nomadic lifestyle and moved frequently, I noticed a r
 I wanted to build something different—a tool that bridges the gap between digital data and physical space. 
 
 * **Virtual Home Modeling**: Using AI and Voxel art to create a high-fidelity 3D replica of your actual living space.
-  <img width="400" height="475" alt="GHBanner" src="https://github.com/Cornelia-Chen/fox-ai-butler-model/blob/main/Screenshot%202026-02-04%20104107.png?raw=true" />
+  <img width="300" height="475" alt="GHBanner" src="https://github.com/Cornelia-Chen/fox-ai-butler-model/blob/main/Screenshot%202026-02-04%20104107.png?raw=true" />
 * **AI Butler**: Beyond simple tracking, the AI provides emotional value and proactive management, acting as a true "Butler" for your digital home.
 * **Gamified Organization**: Turning the tedious task of inventory into an intuitive, visual, and rewarding game.
 
