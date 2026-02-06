@@ -33,8 +33,13 @@ I wanted to build something different—a tool that bridges the gap between digi
 ## 🔮 The Future Vision
 My aspiration for **Life Manager** extends beyond personal organization:
 
-* **Spatial Community**: I envision a social layer where friends can "visit" each other's virtual homes, sharing interior design inspirations and organizational tips.
-* **AI-Driven Commerce Intelligence**: By scanning receipts, the AI Butler will facilitate seamless information exchange, alerting the community to the best discounts and helping everyone shop smarter.
+-  **Spatial Community**: Visit friends' virtual homes for design inspiration and social interaction.
+-  **Smart Commerce**: AI receipt scanning to automatically find the best local discounts for the community.
+-  **High-Fidelity Furniture Rendering** : Improve furniture visual quality to more closely match real-world shapes, proportions, and materials, while maintaining performance efficiency in the browser.
+-  **Realistic-to-Stylized Apparel Projection**  
+  Support clothing visualization that can:
+    - Accurately resemble real garments based on photos or descriptions  
+     - Or be *diffracted* into a **cartoon-style** representation, balancing recognizability with visual clarity
 
 ---
 
