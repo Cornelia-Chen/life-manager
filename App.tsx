@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { GoogleGenAI, GenerateContentResponse, LiveServerMessage, Modality } from "@google/genai";
 import { Layout } from './components/Layout';
@@ -15,6 +16,21 @@ import { processImageWithAI, OCRResult, ReceiptItem, RoomType, PurchaseRecord, L
 import { getAllBlueprints, initializeRepository } from './services/voxelRepository'; 
 import { BlueprintRecord } from './services/voxelTypes';
 import { INITIAL_INVENTORY } from './services/initialInventory';
+
+// --- Onboarding Components ---
+const PRESET_AVATARS = [
+    { id: 'a1', src: "https://raw.githubusercontent.com/Cornelia-Chen/fox-ai-butler-model/ca95e7a85fcefb8c8e932d6afa4a0a35dcc38a25/Subject%20(2).png", name: 'Alice' },
+    { id: 'a2', src: "https://raw.githubusercontent.com/Cornelia-Chen/fox-ai-butler-model/main/Subject.png", name: 'Fox' },
+    { id: 'a3', src: "https://github.com/Cornelia-Chen/fox-ai-butler-model/blob/main/Subject%20(3).png?raw=true", name: 'Bean' }
+];
+
+const TOUR_STEPS = (t: any) => [
+    { id: 'home', icon: 'fa-warehouse', text: t.tour_home, targetStep: 'home' },
+    { id: 'inbox', icon: 'fa-comment-dots', text: t.tour_inbox, targetStep: 'inbox' },
+    { id: 'upload', icon: 'fa-camera', text: t.tour_camera, targetStep: 'upload' },
+    { id: 'plaza', icon: 'fa-shopping-bag', text: t.tour_plaza, targetStep: 'plaza' },
+    { id: 'butler', icon: 'fa-user-astronaut', text: t.tour_butler, targetStep: 'butler' }
+];
 
 // --- Audio Helpers ---
 function encode(bytes: Uint8Array) {
@@ -88,6 +104,69 @@ const NAV_TEXT: Record<LanguageCode, { home: string; inbox: string; scan: string
   'es': { home: 'Inicio', inbox: 'Buzón', scan: 'Escanear', plaza: 'Plaza', butler: 'Mayordomo' }
 };
 
+const ONBOARDING_TEXT: Record<LanguageCode, any> = {
+    'zh-CN': {
+        choose_lang: '请选择您的语言',
+        choose_butler: '选择您的AI管家形象',
+        welcome: '欢迎回来，主人！',
+        tour_home: '这是您的“家”，在这里可以3D可视化管理所有家具和资产。',
+        tour_inbox: '这里处理邻里消息，您可以和他人沟通闲置物品交易。',
+        tour_camera: '最核心的功能！支持AI图片识字、购物小票识别，自动整理入库。',
+        tour_plaza: '社区广场，查看附近的人在卖什么，或者分享您的生活情报。',
+        tour_butler: '我的大本营。在这里调教我的性格，或者让我为您推荐菜谱。',
+        next: '下一步',
+        start: '开始体验'
+    },
+    'en': {
+        choose_lang: 'Choose Your Language',
+        choose_butler: 'Select Butler Avatar',
+        welcome: 'Welcome back, Master!',
+        tour_home: 'This is your Home. Manage all furniture and assets in 3D.',
+        tour_inbox: 'Check your messages here to trade pre-loved items.',
+        tour_camera: 'The core! AI OCR for receipts and text extraction.',
+        tour_plaza: 'Community Plaza. See what neighbors are selling.',
+        tour_butler: 'My HQ. Customize my personality or get recipe ideas.',
+        next: 'Next',
+        start: 'Start'
+    },
+    'fr': {
+        choose_lang: 'Choisissez votre langue',
+        choose_butler: 'Sélectionnez l\'avatar du majordome',
+        welcome: 'Bon retour, Maître !',
+        tour_home: 'C\'est votre maison. Gérez tous les meubles et actifs en 3D.',
+        tour_inbox: 'Consultez vos messages ici pour échanger des articles.',
+        tour_camera: 'Le cœur ! OCR AI pour les reçus et l\'extraction de texte.',
+        tour_plaza: 'Place de la communauté. Voyez ce que les voisins vendent.',
+        tour_butler: 'Mon QG. Personnalisez ma personnalité ou obtenez des idées de recettes.',
+        next: 'Suivant',
+        start: 'Commencer'
+    },
+    'ja': {
+        choose_lang: '言語を選択してください',
+        choose_butler: '執事のアバターを選択',
+        welcome: 'おかえりなさい、ご主人様！',
+        tour_home: 'ここはあなたの「家」です。3Dですべての家具と資産を管理できます。',
+        tour_inbox: '近所のメッセージを確認し、不用品の取引ができます。',
+        tour_camera: '核となる機能！AIによるレシートや文字の認識、自動整理。',
+        tour_plaza: 'コミュニティ広場。近所の人が何を売っているか確認できます。',
+        tour_butler: '私の本拠地。性格をカスタマイズしたり、レシピのアイデアを得たりできます。',
+        next: '次へ',
+        start: '開始'
+    },
+    'es': {
+        choose_lang: 'Elige tu idioma',
+        choose_butler: 'Selecciona el avatar del mayordomo',
+        welcome: '¡Bienvenido de nuevo, Maestro!',
+        tour_home: 'Este es tu Hogar. Gestiona todos los muebles y activos en 3D.',
+        tour_inbox: 'Revisa tus mensajes aquí para intercambiar artículos.',
+        tour_camera: '¡El núcleo! OCR de IA para recibos y extracción de texto.',
+        tour_plaza: 'Plaza de la comunidad. Mira lo que venden los vecinos.',
+        tour_butler: 'Mi cuartel general. Personaliza mi personalidad o busca recetas.',
+        next: 'Siguiente',
+        start: 'Comenzar'
+    }
+};
+
 const BUTLER_GREETINGS: Record<LanguageCode, string> = {
     'zh-CN': '主人，有什么吩咐吗？',
     'en': 'Yes, Master? How can I help?',
@@ -97,6 +176,8 @@ const BUTLER_GREETINGS: Record<LanguageCode, string> = {
 };
 
 const App: React.FC = () => {
+  const [onboarding, setOnboarding] = useState<'lang' | 'avatar' | 'tour' | 'done'>('done');
+  const [tourIndex, setTourIndex] = useState(0);
   const [step, setStep] = useState<AppStep>('home');
   const [lastStep, setLastStep] = useState<AppStep>('home'); 
   const [selectedRoom, setSelectedRoom] = useState<RoomType | null>(null);
@@ -104,18 +185,9 @@ const App: React.FC = () => {
   const [ocrResult, setOcrResult] = useState<OCRResult | null>(null);
   const [reviewDate, setReviewDate] = useState<string>(''); 
   
-  // Sell Modal State for Review Step
-  const [sellModalState, setSellModalState] = useState<{ index: number; ad: string; price: string; loading: boolean } | null>(null);
-
   const [inventory, setInventory] = useState<ReceiptItem[]>([]);
   const prevInventoryRef = useRef<ReceiptItem[]>([]);
-
-  // Restock / Consumption Check Modal State
-  const [restockCheck, setRestockCheck] = useState<{ 
-      item: ReceiptItem; 
-      newItem: Partial<ReceiptItem & { quantity: number; price: number }>; 
-      pendingQueue: Partial<ReceiptItem & { quantity: number; price: number }>[];
-  } | null>(null);
+  const [restockCheck, setRestockCheck] = useState<{ item: ReceiptItem; newItem: Partial<ReceiptItem & { quantity: number; price: number }>; pendingQueue: Partial<ReceiptItem & { quantity: number; price: number }>[]; } | null>(null);
 
   const [communityItems, setCommunityItems] = useState<ReceiptItem[]>([]);
   const [initialCommunityView, setInitialCommunityView] = useState<'map' | 'market' | 'square'>('map');
@@ -191,6 +263,32 @@ const App: React.FC = () => {
       const price = item.history[0]?.unitPrice || 0;
       return !(isDefault && price === 0);
   }), [inventory]);
+
+  // --- Onboarding Logic ---
+  useEffect(() => {
+      const isFirstRun = !localStorage.getItem('onboarding_complete_v3');
+      if (isFirstRun) {
+          setOnboarding('lang');
+      }
+  }, []);
+
+  const finishOnboarding = () => {
+      localStorage.setItem('onboarding_complete_v3', 'true');
+      setOnboarding('done');
+      setStep('home');
+  };
+
+  // Sync Tour Progress with App Step
+  useEffect(() => {
+      if (onboarding === 'tour') {
+          const ot = ONBOARDING_TEXT[targetLang] || ONBOARDING_TEXT['zh-CN'];
+          const tourSteps = TOUR_STEPS(ot);
+          const currentStep = tourSteps[tourIndex].targetStep as AppStep;
+          if (currentStep) {
+              setStep(currentStep);
+          }
+      }
+  }, [tourIndex, onboarding, targetLang]);
 
   // --- Map Voice Logic ---
   const cleanupMapVoice = () => {
@@ -552,7 +650,6 @@ const App: React.FC = () => {
   };
 
   const processBatch = (itemsToAdd: Partial<ReceiptItem & { price: number; quantity: number; consumptionRate?: number; consumptionFreq?: string; isSelling?: boolean; askingPrice?: number } & { consumption?: ConsumptionConfig }>[]) => {
-    let smartConsumptionMessage: string | null = null;
     let updatedInventory = [...inventory];
     const recordTimestamp = reviewDate ? new Date(reviewDate).getTime() : Date.now();
     const marketItemsToAdd: ReceiptItem[] = [];
@@ -565,8 +662,6 @@ const App: React.FC = () => {
       const price = Number(newItem.price) || 0;
       const category = newItem.category || 'other';
       const unitPrice = quantity > 0 ? price / quantity : 0;
-      
-      // Determine assigned room based on category if not provided
       const defaultRoom = category === 'food' ? 'kitchen' : (category === 'appliance' ? 'kitchen' : (category === 'medicine' ? 'bathroom' : 'storage'));
       const assignedRoom = newItem.isSelling ? 'living' : (newItem.assignedRoom || defaultRoom); 
 
@@ -577,40 +672,12 @@ const App: React.FC = () => {
       
       if (existingIndex !== -1 && !newItem.isSelling) {
         const target = updatedInventory[existingIndex];
-        let updatedConsumption = target.consumption;
-        
-        if (target.consumption && !target.consumption.isEnabled && target.history.length > 0) {
-            const lastRecord = target.history[0]; 
-            const timeDiff = recordTimestamp - lastRecord.timestamp;
-            const ONE_DAY_MS = 1000 * 60 * 60 * 24;
-            const diffDays = timeDiff / ONE_DAY_MS;
-
-            if (diffDays > 1) {
-                const dailyRate = lastRecord.quantity / diffDays;
-                let newFreq: 'day' | 'week' | 'month' | 'year' = 'month';
-                let newAmount = 1;
-                if (dailyRate >= 0.8) { newFreq = 'day'; newAmount = dailyRate; }
-                else if (dailyRate * 7 >= 0.8) { newFreq = 'week'; newAmount = dailyRate * 7; }
-                else { newFreq = 'month'; newAmount = dailyRate * 30; }
-                
-                newAmount = parseFloat(newAmount.toFixed(2));
-                if (newAmount <= 0) newAmount = 0.01;
-                updatedConsumption = { isEnabled: true, frequency: newFreq, amount: newAmount, lastCalculated: Date.now() };
-            }
-        }
-        
-        updatedInventory[existingIndex] = { ...target, currentQuantity: target.currentQuantity + quantity, history: [{ timestamp: recordTimestamp, quantity, unitPrice }, ...target.history], consumption: updatedConsumption, category: target.category || category };
+        updatedInventory[existingIndex] = { ...target, currentQuantity: target.currentQuantity + quantity, history: [{ timestamp: recordTimestamp, quantity, unitPrice }, ...target.history] };
       } else {
-        let initConsumption: ConsumptionConfig;
-        if (newItem.consumption) { initConsumption = { ...newItem.consumption, lastCalculated: Date.now() }; }
-        else if (newItem.consumptionRate && newItem.consumptionFreq) { initConsumption = { isEnabled: true, amount: newItem.consumptionRate, frequency: newItem.consumptionFreq as 'day' | 'week' | 'month' | 'year', lastCalculated: Date.now() }; }
-        else { initConsumption = { isEnabled: false, amount: 1, frequency: 'month', lastCalculated: Date.now() }; }
-
         const roomCenter = ROOM_CENTERS[assignedRoom as RoomType] || { x: 24, y: 24 };
         const randomOffsetX = (Math.random() - 0.5) * 4; 
         const randomOffsetY = (Math.random() - 0.5) * 4;
         const newId = Math.random().toString(36).substr(2, 9);
-
         const invItem: ReceiptItem = {
           id: newId,
           name: rawName || name,
@@ -622,7 +689,7 @@ const App: React.FC = () => {
           currentQuantity: quantity,
           photo: newItem.photo,
           alertType: 'none', 
-          consumption: initConsumption,
+          consumption: { isEnabled: false, amount: 1, frequency: 'month', lastCalculated: Date.now() },
           showOnMap: newItem.showOnMap !== undefined ? newItem.showOnMap : (index === 0 || newItem.isSelling), 
           position: { x: roomCenter.x + randomOffsetX, y: roomCenter.y + randomOffsetY },
           marketStatus: newItem.isSelling ? 'selling' : undefined,
@@ -632,225 +699,31 @@ const App: React.FC = () => {
           sellerName: newItem.isSelling ? 'Me' : undefined,
           category: category
         };
-
         updatedInventory.unshift(invItem);
-
-        if (newItem.isSelling) {
-            marketItemsToAdd.push({
-                id: `market-${Date.now()}-${Math.random()}`,
-                originalItemId: newId,
-                name: invItem.name,
-                translatedName: invItem.translatedName,
-                emoji: invItem.emoji,
-                unit: invItem.unit,
-                assignedRoom: invItem.assignedRoom,
-                history: [],
-                currentQuantity: 1,
-                photo: invItem.photo,
-                isPublic: true,
-                sellerName: 'Me',
-                priceTag: newItem.askingPrice || 0,
-                description: newItem.description,
-                marketStatus: 'selling',
-                category: category
-            });
-        }
       }
     });
-    
-    if (marketItemsToAdd.length > 0) {
-        setCommunityItems(prev => [...marketItemsToAdd, ...prev]);
-    }
-
-    ignoreNextAlerts.current = true;
     setInventory(updatedInventory);
-
-    if (itemsToAdd.length > 0) {
-        const targetRooms = Array.from(new Set(updatedInventory.filter(i => itemsToAdd.some(add => add.name === i.name || add.translatedName === i.translatedName)).map(i => i.assignedRoom || 'storage')));
-        const itemNames = itemsToAdd.slice(0, 2).map(i => i.translatedName || i.name || 'Item').join(targetLang === 'zh-CN' ? '、' : ', ');
-        const moreCount = itemsToAdd.length > 2 ? (targetLang === 'zh-CN' ? `等${itemsToAdd.length}件物品` : ` and ${itemsToAdd.length - 2} more`) : '';
-        const roomMap: Record<string, string> = { 'kitchen': '厨房', 'living': '客厅', 'bedroom': '卧室', 'bathroom': '洗手间', 'balcony': '阳台', 'storage': '储藏室', 'cloakroom': '衣帽间' };
-        let msg = '';
-        if (targetLang === 'zh-CN') {
-             const roomNames = targetRooms.map(r => roomMap[r] || r).join('和');
-             msg = `已将 ${itemNames}${moreCount} 放入${roomNames}。点击房间可以查看物品列表哦！`;
-        } else {
-             const roomNames = targetRooms.join(' and ');
-             msg = `I've put ${itemNames}${moreCount} in the ${roomNames}. You can click the rooms to view the item list!`;
-        }
-        if (smartConsumptionMessage) msg = `${msg} ${smartConsumptionMessage}`;
-        setButlerMessage(msg);
-        setWalkToRoom(targetRooms[0] as RoomType);
-    }
+    setStep('home');
   };
 
   const handleRestockConfirm = (didFinishPrevious: boolean) => {
       if (!restockCheck) return;
       const { item, newItem, pendingQueue } = restockCheck;
-      
       const updatedInventory = [...inventory];
       const existingIndex = updatedInventory.findIndex(i => i.id === item.id);
-      
       if (existingIndex !== -1) {
           const target = updatedInventory[existingIndex];
           const newQ = newItem.quantity || 1;
           const finalReviewDateTs = reviewDate ? new Date(reviewDate).getTime() : Date.now();
-          
-          let consumptionUpdate = target.consumption;
-          let newCurrentQty = target.currentQuantity + newQ;
-
-          if (didFinishPrevious) {
-              if (target.history.length > 0) {
-                  const lastPurchase = target.history[0];
-                  const daysDiff = Math.max(1, (finalReviewDateTs - lastPurchase.timestamp) / (1000 * 3600 * 24));
-                  const dailyRate = lastPurchase.quantity / daysDiff;
-                  
-                  let newFreq: 'day'|'week'|'month'|'year' = 'month';
-                  let newAmount = dailyRate * 30;
-                  
-                  if (dailyRate >= 0.8) { newFreq = 'day'; newAmount = dailyRate; }
-                  else if (dailyRate * 7 >= 0.8) { newFreq = 'week'; newAmount = dailyRate * 7; }
-                  
-                  newAmount = parseFloat(newAmount.toFixed(2));
-                  if (newAmount <= 0) newAmount = 0.01;
-
-                  const currentDaily = target.consumption?.isEnabled 
-                        ? (target.consumption.frequency === 'day' ? target.consumption.amount 
-                          : target.consumption.frequency === 'week' ? target.consumption.amount/7 
-                          : target.consumption.frequency === 'month' ? target.consumption.amount : target.consumption.frequency === 'year' ? target.consumption.amount/365 : 0) 
-                        : 0;
-                  
-                  const deviation = Math.abs(dailyRate - currentDaily) / (dailyRate || 1);
-                  const isSignificant = deviation > 0.2 || !target.consumption?.isEnabled;
-
-                  if (isSignificant) {
-                      consumptionUpdate = { 
-                          isEnabled: true, 
-                          frequency: newFreq, 
-                          amount: newAmount, 
-                          lastCalculated: finalReviewDateTs 
-                      };
-                      
-                      const fStr = newFreq === 'day' ? (targetLang === 'zh-CN' ? '天' : 'day') : newFreq === 'week' ? (targetLang === 'zh-CN' ? '周' : 'week') : (targetLang === 'zh-CN' ? '月' : 'month');
-                      setButlerMessage(targetLang === 'zh-CN' 
-                          ? `已按您习惯更新消耗：每${fStr} ${newAmount}${target.unit}`
-                          : `Updated usage: ${newAmount}${target.unit}/${newFreq}`);
-                  }
-              }
-              newCurrentQty = newQ;
-          }
-
           updatedInventory[existingIndex] = {
               ...target,
-              currentQuantity: newCurrentQty,
-              history: [{ timestamp: finalReviewDateTs, quantity: newQ, unitPrice: newItem.price || 0 }, ...target.history],
-              consumption: consumptionUpdate
+              currentQuantity: didFinishPrevious ? newQ : target.currentQuantity + newQ,
+              history: [{ timestamp: finalReviewDateTs, quantity: newQ, unitPrice: newItem.price || 0 }, ...target.history]
           };
           setInventory(updatedInventory);
-      } else {
-          processBatch([newItem]);
       }
-
-      if (pendingQueue.length > 0) {
-          const nextExisting = inventory.find(i => i.translatedName === pendingQueue[0].translatedName || i.name === pendingQueue[0].name);
-          if (nextExisting) {
-              setRestockCheck({
-                  item: nextExisting,
-                  newItem: pendingQueue[0],
-                  pendingQueue: pendingQueue.slice(1)
-              });
-          } else {
-              processBatch(pendingQueue); 
-              setRestockCheck(null);
-              setStep('home');
-              setOcrResult(null);
-          }
-      } else {
-          setRestockCheck(null);
-          setStep('home');
-          setOcrResult(null);
-      }
-  };
-
-  const handleConsumeItemRequest = (name: string): string => {
-      const normalizedSearch = name.toLowerCase();
-      const existingItemIndex = inventory.findIndex(item => 
-          item.translatedName.toLowerCase().includes(normalizedSearch) || 
-          item.name.toLowerCase().includes(normalizedSearch)
-      );
-
-      if (existingItemIndex === -1) return "I couldn't find that item in your inventory to consume.";
-      const item = inventory[existingItemIndex];
-      let consumptionMsg = "";
-      let updatedConsumption = item.consumption;
-
-      if (item.history && item.history.length > 0) {
-          const lastPurchase = item.history[0];
-          const now = Date.now();
-          const timeDiff = now - lastPurchase.timestamp;
-          const diffDays = timeDiff / (1000 * 60 * 60 * 24);
-
-          if (diffDays >= 1) {
-              const totalQuantityConsumed = lastPurchase.quantity; 
-              const dailyRate = totalQuantityConsumed / diffDays;
-              let newFreq: 'day' | 'week' | 'month' | 'year' = 'month';
-              let newAmount = 1;
-              if (dailyRate >= 0.8) { newFreq = 'day'; newAmount = parseFloat(dailyRate.toFixed(2)); }
-              else if (dailyRate * 7 >= 0.8) { newFreq = 'week'; newAmount = parseFloat((dailyRate * 7).toFixed(2)); }
-              else { newFreq = 'month'; newAmount = parseFloat((dailyRate * 30).toFixed(2)); }
-              
-              if (newAmount <= 0) newAmount = 0.01;
-              updatedConsumption = { isEnabled: true, frequency: newFreq, amount: newAmount, lastCalculated: now };
-              consumptionMsg = targetLang === 'zh-CN' 
-                  ? `已自动计算消耗速度: 每${newFreq === 'day'?'天':newFreq==='week'?'周':'月'} ${newAmount}${item.unit}。`
-                  : `Auto-calculated rate: ${newAmount} ${item.unit}/${newFreq}.`;
-          }
-      }
-
-      const updatedInventory = [...inventory];
-      updatedInventory[existingItemIndex] = { ...item, currentQuantity: 0, consumption: updatedConsumption };
-      setInventory(updatedInventory);
-      return targetLang === 'zh-CN' 
-          ? `好的，${item.translatedName} 已标记为用完。${consumptionMsg}`
-          : `Okay, marked ${item.translatedName} as finished. ${consumptionMsg}`;
-  };
-
-  const handleReviewItemChange = (index: number, changes: Partial<ReceiptItem & { price: number ; isSelling?: boolean; askingPrice?: number; description?: string}>) => {
-    setOcrResult(prev => {
-        if (!prev || !prev.items) return prev;
-        const newItems = [...prev.items];
-        newItems[index] = { ...newItems[index], ...changes };
-        return { ...prev, items: newItems };
-    });
-  };
-
-  const handleSellClickInReview = async (index: number, item: any) => {
-    if (item.isSelling) {
-        handleReviewItemChange(index, { isSelling: false, askingPrice: undefined, description: undefined });
-        return;
-    }
-    setSellModalState({ index, ad: '', price: item.price?.toString() || '', loading: true });
-    try {
-        const tempItem: Partial<ReceiptItem> = {
-            translatedName: item.translatedName || item.name,
-            name: item.name,
-        };
-        const ad = await generateSaleAd(tempItem, targetLang);
-        setSellModalState(prev => prev ? { ...prev, ad, loading: false } : null);
-    } catch (e) {
-        setSellModalState(prev => prev ? { ...prev, ad: 'Error generating ad.', loading: false } : null);
-    }
-  };
-
-  const handleConfirmSellModal = () => {
-    if (!sellModalState) return;
-    const { index, ad, price } = sellModalState;
-    handleReviewItemChange(index, { 
-        isSelling: true, 
-        askingPrice: parseFloat(price) || 0, 
-        description: ad 
-    });
-    setSellModalState(null);
+      setRestockCheck(null);
+      setStep('home');
   };
 
   const goHome = () => { 
@@ -902,108 +775,22 @@ const App: React.FC = () => {
   };
 
   const handlePublishToPlaza = (item: ReceiptItem, price: number, ad: string) => {
-    const newItem: ReceiptItem = { 
-        ...item, 
-        id: `market-${Date.now()}`, 
-        originalItemId: item.id,
-        sellerName: 'Me', 
-        priceTag: price, 
-        description: ad, 
-        isPublic: true, 
-        marketStatus: 'selling',
-        currentQuantity: 1
-    };
+    const newItem: ReceiptItem = { ...item, id: `market-${Date.now()}`, originalItemId: item.id, sellerName: 'Me', priceTag: price, description: ad, isPublic: true, marketStatus: 'selling', currentQuantity: 1 };
     setCommunityItems(prev => [newItem, ...prev]);
-    setInventory(prev => prev.map(i => i.id === item.id ? { 
-        ...i, 
-        marketStatus: 'selling',
-        description: ad,
-        priceTag: price,
-        sellerName: 'Me',
-        isPublic: true
-    } : i));
     setInitialCommunityView('market');
     setStep('plaza');
-    setButlerMessage(targetLang === 'zh-CN' ? '已成功上架到广场！' : 'Successfully listed on Plaza!');
   };
 
   const handleMarkAsSold = (item: ReceiptItem) => {
       const updatedItem = { ...item, marketStatus: 'sold' as 'sold', currentQuantity: 0, showOnMap: false };
       setCommunityItems(prev => prev.map(i => i.id === item.id ? updatedItem : i));
       setInventory(prev => prev.map(i => i.id === item.id ? updatedItem : i));
-      if (item.originalItemId) {
-          setInventory(prev => prev.map(i => {
-              if (i.id === item.originalItemId) {
-                  return { 
-                      ...i, 
-                      currentQuantity: Math.max(0, i.currentQuantity - 1),
-                      marketStatus: i.currentQuantity - 1 > 0 ? i.marketStatus : 'sold'
-                  };
-              }
-              return i;
-          }));
-      } else {
-          setCommunityItems(prev => prev.map(i => {
-              if (i.originalItemId === item.id) {
-                  return { ...i, marketStatus: 'sold', currentQuantity: 0 };
-              }
-              return i;
-          }));
-      }
       setSelectedItem(updatedItem);
-  };
-
-  const handleCancelListing = (item: ReceiptItem) => {
-      setCommunityItems(prev => prev.filter(i => i.originalItemId !== item.id && i.id !== item.id));
-      const resetItem = { 
-          ...item, 
-          marketStatus: undefined, 
-          isPublic: false, 
-          sellerName: undefined, 
-          priceTag: undefined 
-      };
-      setInventory(prev => prev.map(i => i.id === item.id ? resetItem : i));
-      setSelectedItem(resetItem);
-      setButlerMessage(targetLang === 'zh-CN' ? '已取消出售。' : 'Listing cancelled.');
-  };
-
-  const handleRoomItemClick = (item: ReceiptItem) => {
-      setSelectedItem(item);
-      setLastStep('inventory'); 
-      setStep('item_detail');
   };
 
   const handleOpenConversation = (conv: Conversation) => {
       setSelectedConversationId(conv.id);
-      setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, unread: false } : c));
-      const linkedItem = communityItems.find(i => i.translatedName === conv.itemName) || inventory.find(i => i.translatedName === conv.itemName);
-      if (linkedItem) setSelectedItem(linkedItem);
-      else setSelectedItem({ id: 'chat-temp-' + conv.id, name: conv.itemName, translatedName: conv.itemName, emoji: '📦', unit: 'unit', assignedRoom: 'storage', history: [], currentQuantity: 1, priceTag: conv.itemPrice, sellerName: conv.otherUserName });
       setStep('chat');
-  };
-
-  const handleCommunityUserClick = (userName: string) => {
-      const existing = conversations.find(c => c.otherUserName === userName);
-      if (existing) handleOpenConversation(existing);
-      else {
-          const newId = Date.now().toString();
-          const newConv: Conversation = { id: newId, otherUserName: userName, itemName: 'Community Chat', itemPrice: 0, unread: false, avatar: '👤', messages: [] };
-          setConversations(prev => [newConv, ...prev]);
-          setSelectedConversationId(newId);
-          setSelectedItem({ id: 'chat-user-' + newId, name: 'Community Chat', translatedName: 'Chat with ' + userName, emoji: '💬', unit: '', assignedRoom: 'living', history: [], currentQuantity: 0, sellerName: userName, priceTag: 0 });
-          setStep('chat');
-      }
-  };
-
-  const handleMessageSent = (text: string) => {
-     if (selectedConversationId) {
-         setConversations(prev => prev.map(c => c.id === selectedConversationId ? { ...c, messages: [...c.messages, { id: Date.now().toString(), sender: 'me', text, timestamp: Date.now() }] } : c));
-     } else if (selectedItem) {
-         const newId = Date.now().toString();
-         const newConv: Conversation = { id: newId, otherUserName: selectedItem.sellerName || 'Seller', itemName: selectedItem.translatedName, itemPrice: selectedItem.priceTag || 0, unread: false, avatar: '👤', messages: [{ id: Date.now().toString(), sender: 'me', text, timestamp: Date.now() }] };
-         setConversations(prev => [newConv, ...prev]);
-         setSelectedConversationId(newId);
-     }
   };
 
   const getUnreadCount = () => conversations.filter(c => c.unread).length;
@@ -1026,61 +813,156 @@ const App: React.FC = () => {
             2. If mentioning travelling/going away use 'setTravelMode' (isActive=true).
             3. If mentioning returning/back home, use 'setTravelMode' (isActive=false).
             4. If adding items, use 'addItemToInventory'. 
-            5. If item consumed/empty, use 'consumeItem'. 
-            6. Otherwise reply in ${targetLang} (max 20 words).` }] },
+            5. Otherwise reply in ${targetLang} (max 20 words).` }] },
             config: { tools: [{ functionDeclarations: [findItemTool, setTravelModeTool, addItemTool, consumeItemTool] }] }
         });
         const call = response.functionCalls?.[0];
         if (call) {
              if (call.name === 'findItemInInventory') {
-                const args = call.args as any;
-                const found = handleFindItem(args.itemName);
-                const notFoundMsg = targetLang === 'zh-CN' ? `我找不到 "${args.itemName}"。` : `I couldn't find "${args.itemName}".`;
-                if (!found) setQuickChatResponse(notFoundMsg);
-             } else if (call.name === 'consumeItem') {
-                 const args = call.args as any;
-                 const resultMsg = handleConsumeItemRequest(args.itemName);
-                 setQuickChatResponse(resultMsg);
+                handleFindItem((call.args as any).itemName);
              } else if (call.name === 'addItemToInventory') {
-                 const args = call.args as any;
-                 setManualEntryInitialName(args.itemName || '');
+                 setManualEntryInitialName((call.args as any).itemName || '');
                  setIsQuickChatOpen(false); 
                  setStep('manual_entry'); 
-                 return;
              } else if (call.name === 'setTravelMode') {
                  const args = call.args as any;
-                 const isActive = args.isActive;
-                 const start = args.startDate === 'now' ? Date.now() : (args.startDate ? new Date(args.startDate).getTime() : undefined);
-                 const end = args.endDate === 'unknown' ? undefined : (args.endDate ? new Date(args.endDate).getTime() : undefined);
-                 setTravelConfig({ isTravelMode: isActive, startDate: start, endDate: end });
-                 const travelResponses: Record<string, string> = {
-                     on: targetLang === 'zh-CN' ? '旅行模式已开启。祝您旅途愉快！' : "Travel mode ON. Have fun!",
-                     off: targetLang === 'zh-CN' ? '欢迎回家！旅行模式已关闭，消耗恢复。' : "Welcome back! Travel mode OFF."
-                 };
-                 setQuickChatResponse(isActive ? travelResponses.on : travelResponses.off);
+                 setTravelConfig({ isTravelMode: args.isActive, startDate: args.startDate === 'now' ? Date.now() : undefined });
+                 setQuickChatResponse(args.isActive ? "Travel mode ON." : "Welcome back!");
              }
         } else setQuickChatResponse(response.text || "...");
-    } catch (e) { setQuickChatResponse("I can't hear you right now..."); } finally { setIsQuickChatLoading(false); setQuickChatInput(''); }
+    } catch (e) { setQuickChatResponse("I can't hear you right now..."); } finally { setIsQuickChatLoading(false); }
   };
 
   if (step === 'voxel_forge') return <VoxelForgeView onBack={() => setStep('house_edit')} />;
   if (step === 'house_edit') return <HouseEditView inventory={inventory} onUpdateInventory={setInventory} onBack={goHome} currentLang={targetLang} onItemMove={handleItemMove} goToForge={() => setStep('voxel_forge')} butlerImage={butler.appearance.customAvatar} butlerScale={butler.appearance.scale} />;
 
+  const ot = ONBOARDING_TEXT[targetLang] || ONBOARDING_TEXT['zh-CN'];
+  const tourSteps = TOUR_STEPS(ot);
+
   return (
     <Layout currentLang={targetLang} onLangChange={setTargetLang}>
+      {/* --- Onboarding System Overlay --- */}
+      {onboarding !== 'done' && (
+          <div className={`fixed inset-0 z-[1000] flex items-center justify-center p-6 animate-in fade-in duration-500 ${onboarding === 'tour' ? 'bg-slate-900/10 backdrop-blur-[2px]' : 'bg-slate-900/40 backdrop-blur-xl'}`}>
+              {onboarding === 'lang' && (
+                  <div className="bg-white/90 p-8 rounded-[3rem] shadow-2xl w-full max-w-sm border border-white text-center flex flex-col items-center">
+                      <div className="w-20 h-20 bg-pink-500 rounded-3xl flex items-center justify-center text-white text-3xl mb-6 shadow-xl shadow-pink-200">
+                          <i className="fas fa-language"></i>
+                      </div>
+                      <h3 className="text-xl font-black text-purple-900 mb-8">{ONBOARDING_TEXT['zh-CN'].choose_lang} / {ONBOARDING_TEXT['en'].choose_lang}</h3>
+                      <div className="grid grid-cols-2 gap-4 w-full">
+                          {[
+                              { code: 'zh-CN', label: '中文', flag: '🇨🇳' },
+                              { code: 'en', label: 'English', flag: '🇺🇸' },
+                              { code: 'ja', label: '日本語', flag: '🇯🇵' },
+                              { code: 'fr', label: 'Français', flag: '🇫🇷' }
+                          ].map(l => (
+                              <button key={l.code} onClick={() => { setTargetLang(l.code as LanguageCode); setOnboarding('avatar'); }} className="p-4 bg-white border border-purple-100 rounded-2xl flex flex-col items-center gap-2 hover:border-pink-500 hover:shadow-lg transition-all active:scale-95 group">
+                                  <span className="text-3xl">{l.flag}</span>
+                                  <span className="text-xs font-black text-purple-800 group-hover:text-pink-500">{l.label}</span>
+                              </button>
+                          ))}
+                      </div>
+                  </div>
+              )}
+
+              {onboarding === 'avatar' && (
+                  <div className="bg-white/90 p-8 rounded-[3rem] shadow-2xl w-full max-w-sm border border-white text-center flex flex-col items-center relative overflow-hidden">
+                      <div className="absolute -top-10 -right-10 w-40 h-40 bg-pink-100 rounded-full blur-3xl opacity-50"></div>
+                      <h3 className="text-xl font-black text-purple-900 mb-2 relative z-10">{ot.welcome}</h3>
+                      <p className="text-sm font-bold text-purple-400 mb-6 relative z-10">{ot.choose_butler}</p>
+                      
+                      {/* Full Butler Preview */}
+                      <div className="w-full aspect-[4/5] bg-purple-50 rounded-3xl overflow-hidden mb-6 border-2 border-white shadow-inner relative group">
+                          <img 
+                            src={butler.appearance.customAvatar || PRESET_AVATARS[0].src} 
+                            className="w-full h-full object-contain drop-shadow-2xl transition-all duration-700 group-hover:scale-105" 
+                            alt="Butler Preview" 
+                          />
+                          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-1.5 bg-white/80 backdrop-blur rounded-full text-[10px] font-black text-purple-800 shadow-lg border border-white">
+                             {PRESET_AVATARS.find(a => a.src === butler.appearance.customAvatar)?.name || 'Ready!'}
+                          </div>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-3 w-full mb-8 relative z-10">
+                          {PRESET_AVATARS.map(a => (
+                              <button key={a.id} onClick={() => setButler({ ...butler, appearance: { ...butler.appearance, customAvatar: a.src } })} className={`aspect-square rounded-2xl overflow-hidden border-4 transition-all ${butler.appearance.customAvatar === a.src ? 'border-pink-500 scale-105 shadow-xl shadow-pink-100' : 'border-white'}`}>
+                                  <img src={a.src} className="w-full h-full object-cover object-top scale-[1.3] origin-top" alt={a.name} />
+                              </button>
+                          ))}
+                      </div>
+                      <button onClick={() => setOnboarding('tour')} className="w-full py-4 bg-purple-800 text-white font-black rounded-2xl shadow-xl active:scale-95 transition-transform uppercase tracking-widest text-xs relative z-10">
+                          {ot.next}
+                      </button>
+                  </div>
+              )}
+
+              {onboarding === 'tour' && (
+                  <div className="absolute inset-0 flex flex-col items-center pointer-events-none">
+                      {/* Low Opacity Overlay */}
+                      <div className="absolute inset-0 bg-black/20"></div>
+                      
+                      {/* Character + Tooltip Bubble */}
+                      <div className="absolute bottom-36 left-1/2 -translate-x-1/2 w-full max-w-[320px] flex flex-col items-center pointer-events-auto">
+                           
+                           {/* Standing Full Character */}
+                           <div className="relative w-48 h-64 -mb-12 animate-in slide-in-from-bottom-8 duration-700">
+                               <img 
+                                 src={butler.appearance.customAvatar} 
+                                 className="w-full h-full object-contain drop-shadow-[0_20px_30px_rgba(0,0,0,0.4)] filter brightness-105" 
+                                 alt="Tour Butler" 
+                               />
+                               <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-20 h-4 bg-black/30 rounded-full blur-md"></div>
+                           </div>
+
+                           <div className="bg-white p-6 rounded-[2.5rem] shadow-2xl border border-white relative z-10 animate-in zoom-in duration-300">
+                                <div className="flex items-center gap-3 mb-4">
+                                    <div className="w-10 h-10 bg-purple-800 text-white rounded-xl flex items-center justify-center text-lg">
+                                        <i className={`fas ${tourSteps[tourIndex].icon}`}></i>
+                                    </div>
+                                    <span className="text-[10px] font-black text-purple-400 uppercase tracking-[0.2em]">{butler.name} 指引中</span>
+                                </div>
+                                <p className="text-xs font-bold text-purple-900 leading-relaxed mb-6">
+                                    {tourSteps[tourIndex].text}
+                                </p>
+                                <button 
+                                  onClick={() => {
+                                      if (tourIndex < tourSteps.length - 1) setTourIndex(tourIndex + 1);
+                                      else finishOnboarding();
+                                  }}
+                                  className="w-full py-3 bg-pink-500 text-white font-black text-xs uppercase tracking-widest rounded-xl shadow-lg shadow-pink-100 active:scale-95 transition-all"
+                                >
+                                    {tourIndex < tourSteps.length - 1 ? ot.next : ot.start}
+                                </button>
+                           </div>
+                      </div>
+
+                      {/* Nav Indicator */}
+                      <div className="absolute bottom-10 inset-x-0 mx-auto max-w-[340px] flex justify-around px-2">
+                          {tourSteps.map((s, i) => (
+                              <div key={s.id} className={`w-11 h-11 flex items-center justify-center transition-all duration-500 ${tourIndex === i ? 'opacity-100' : 'opacity-0 scale-50'}`}>
+                                  <div className="w-14 h-14 border-4 border-pink-500 rounded-full animate-ping"></div>
+                                  <div className="absolute w-3 h-3 bg-pink-500 rounded-full shadow-lg"></div>
+                              </div>
+                          ))}
+                      </div>
+                  </div>
+              )}
+          </div>
+      )}
+
       <div className="max-w-md mx-auto flex flex-col min-h-[85vh] bg-gradient-to-br from-purple-100 to-pink-100 p-4 rounded-[3.5rem] shadow-2xl relative overflow-hidden pb-32">
-        {travelConfig.isTravelMode && <div className="absolute top-0 left-0 right-0 z-[60] bg-blue-500 text-white text-[10px] font-black uppercase text-center py-1 flex items-center justify-center space-x-2 shadow-md"><i className="fas fa-plane"></i><span>Travel Mode Active</span>{travelConfig.endDate && <span>Until {new Date(travelConfig.endDate).toLocaleDateString()}</span>}</div>}
-        {error && <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[100] w-[90%] max-w-sm bg-red-500 text-white px-4 py-3 rounded-2xl shadow-xl animate-in slide-in-from-top-5 flex items-center justify-between"><div className="flex items-center space-x-2"><i className="fas fa-exclamation-circle text-white/80"></i><div className="text-xs font-bold">{error}</div></div><button onClick={() => setError(null)} className="w-6 h-6 flex items-center justify-center bg-white/20 rounded-full hover:bg-white/30 transition-colors"><i className="fas fa-times text-xs"></i></button></div>}
+        {travelConfig.isTravelMode && <div className="absolute top-0 left-0 right-0 z-[60] bg-blue-500 text-white text-[10px] font-black uppercase text-center py-1 flex items-center justify-center space-x-2 shadow-md"><i className="fas fa-plane"></i><span>Travel Mode Active</span></div>}
 
         {step === 'home' && (
           <div className="animate-in fade-in duration-500 flex flex-col flex-1 relative">
             <div className="flex justify-between items-start mb-6 mt-4 px-2">
               <h2 className="text-4xl font-black text-purple-800 tracking-tight leading-none uppercase">{NAV_TEXT[targetLang].home}</h2>
-              <button onClick={() => setStep('butler')} className="w-16 h-16 bg-purple-100 rounded-2xl shadow-xl border-2 border-white flex items-center justify-center overflow-hidden relative active:scale-90 transition-all group">{butler.appearance.customAvatar ? <img src={butler.appearance.customAvatar} alt="Butler" className="w-full h-full object-cover object-top scale-125 translate-y-2" /> : <><div className={`absolute inset-0 ${butler.personality === 'strict' ? 'bg-slate-700' : butler.personality === 'gentle' ? 'bg-pink-200' : 'bg-indigo-400'} transition-colors duration-500`}></div><div className="absolute top-2.5 w-10 h-10 flex justify-center shadow-sm transition-transform duration-300 group-hover:scale-110 z-10"><div className="absolute top-0 left-1/2 -translate-x-1/2 w-14 h-14 bg-pink-400 rounded-full -z-10" /><div className="absolute -bottom-5 w-10 h-8 bg-blue-400 rounded-t-xl z-0 flex justify-center shadow-inner"><div className="mt-0.5 w-3 h-3 bg-white rotate-45" /></div><div className="relative w-10 h-10 bg-white rounded-full overflow-hidden"><div className="absolute top-0 left-0 w-full h-4 z-10"><div className="absolute top-0 w-full h-3 bg-pink-400 rounded-b-md" /></div><div className="flex justify-center space-x-1.5 mt-4"><div className="w-2.5 h-3 bg-slate-800 rounded-full relative"><div className="absolute top-0.5 right-0.5 w-1 h-1 bg-white rounded-full" /></div><div className="w-2.5 h-3 bg-slate-800 rounded-full relative"><div className="absolute top-0.5 right-0.5 w-1 h-1 bg-white rounded-full" /></div></div><div className="absolute top-6 left-0.5 w-2 h-1 bg-pink-300 rounded-full blur-[1px] opacity-60" /><div className="absolute top-6 right-0.5 w-2 h-1 bg-pink-300 rounded-full blur-[1px] opacity-60" /><div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-1.5 h-0.5 bg-pink-500 rounded-full opacity-60" /></div></div></>}<div className="absolute bottom-0 right-0 bg-pink-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-tl-lg rounded-br-lg z-20">AI</div></button>
+              <button onClick={() => setStep('butler')} className="w-16 h-16 bg-purple-100 rounded-2xl shadow-xl border-2 border-white flex items-center justify-center overflow-hidden relative active:scale-90 transition-all group">{butler.appearance.customAvatar ? <img src={butler.appearance.customAvatar} alt="Butler" className="w-full h-full object-cover object-top scale-125 translate-y-2" /> : <div className="text-2xl">👩‍🍳</div>}</button>
             </div>
             
             <div className="flex-1 flex flex-col items-center">
-                <div className="relative w-full max-w-[320px] aspect-square mb-8 group"><div className="absolute -inset-1 bg-gradient-to-br from-purple-300 to-pink-300 rounded-[2.8rem] opacity-40 blur-md group-hover:opacity-60 transition-opacity"></div><div className="relative w-full h-full bg-[#05070a] rounded-[2.5rem] overflow-hidden shadow-2xl border-4 border-slate-900"><HouseView inventory={inventory} onRoomClick={(room) => { setSelectedRoom(room); setStep('inventory'); }} currentLang={targetLang} butlerMessage={butlerMessage} onDismissMessage={() => setButlerMessage(null)} onItemMove={handleItemMove} onAvatarClick={() => setIsQuickChatOpen(!isQuickChatOpen)} walkToRoom={walkToRoom} autoFit={true} butlerImage={butler.appearance.customAvatar} butlerScale={butler.appearance.scale} /></div><button onClick={() => setStep('house_edit')} className="absolute -right-2 -top-2 w-12 h-12 bg-slate-900 border-2 border-blue-500 rounded-2xl shadow-lg flex items-center justify-center text-blue-400 hover:text-white hover:scale-110 transition-all z-20" title="Warehouse"><i className="fas fa-warehouse text-lg"></i></button></div>
+                <div className="relative w-full max-w-[320px] aspect-square mb-8 group"><div className="absolute -inset-1 bg-gradient-to-br from-purple-300 to-pink-300 rounded-[2.8rem] opacity-40 blur-md group-hover:opacity-60 transition-opacity"></div><div className="relative w-full h-full bg-[#05070a] rounded-[2.5rem] overflow-hidden shadow-2xl border-4 border-slate-900"><HouseView inventory={inventory} onRoomClick={(room) => { setSelectedRoom(room); setStep('inventory'); }} currentLang={targetLang} butlerMessage={butlerMessage} onDismissMessage={() => setButlerMessage(null)} onItemMove={handleItemMove} onAvatarClick={() => setIsQuickChatOpen(!isQuickChatOpen)} walkToRoom={walkToRoom} autoFit={true} butlerImage={butler.appearance.customAvatar} butlerScale={butler.appearance.scale} /></div><button onClick={() => setStep('house_edit')} className="absolute -right-2 -top-2 w-12 h-12 bg-slate-900 border-2 border-blue-500 rounded-2xl shadow-lg flex items-center justify-center text-blue-400 hover:text-white hover:scale-110 transition-all z-20"><i className="fas fa-warehouse text-lg"></i></button></div>
 
                 {isQuickChatOpen && (
                     <div className="w-full px-4 mb-4 z-50 animate-in slide-in-from-bottom duration-300">
@@ -1115,14 +997,13 @@ const App: React.FC = () => {
             </div>
         )}
 
-        {step === 'butler' && <ButlerView config={butler} onChange={setButler} onBack={goHome} inventory={inventory} addToInventory={addToInventory} targetLang={targetLang} onCook={handleRecipeCook} onFindItem={handleFindItem} onAddItemRequest={(name) => { setManualEntryInitialName(name || ''); setStep('manual_entry'); }} onConsumeItemRequest={handleConsumeItemRequest} travelConfig={travelConfig} onSetTravelConfig={setTravelConfig} />}
+        {step === 'butler' && <ButlerView config={butler} onChange={setButler} onBack={goHome} inventory={inventory} addToInventory={addToInventory} targetLang={targetLang} onCook={handleRecipeCook} onFindItem={handleFindItem} onAddItemRequest={(name) => { setManualEntryInitialName(name || ''); setStep('manual_entry'); }} travelConfig={travelConfig} onSetTravelConfig={setTravelConfig} />}
         {step === 'upload' && <div className="flex-1 flex flex-col pt-10"><div className="mb-10 text-center"><h2 className="text-3xl font-black text-purple-800 tracking-tight">{NAV_TEXT[targetLang].scan.toUpperCase()}</h2><p className="text-[10px] text-pink-500 font-black uppercase tracking-widest">{butler.name} is checking...</p></div><Uploader onImageSelect={processImage} isLoading={isLoading} currentLang={targetLang} /><button onClick={() => setStep('manual_entry')} className="mt-8 py-5 bg-white rounded-3xl text-xs font-black text-purple-800 uppercase border border-purple-100 shadow-sm">Manual Entry</button></div>}
         {step === 'manual_entry' && <ManualEntryView onBack={() => { setStep('upload'); setManualEntryInitialName(''); }} onSubmit={(items) => { addToInventory(items); setManualEntryInitialName(''); }} defaultRoom={selectedRoom} currentLang={targetLang} initialName={manualEntryInitialName} />}
-        {step === 'inventory' && selectedRoom && <div className="flex-1 flex flex-col h-full animate-in slide-in-from-right duration-300"><div className="flex justify-between items-center mb-4"><button onClick={goHome} className="w-10 h-10 bg-white rounded-xl shadow-sm text-purple-400 flex items-center justify-center"><i className="fas fa-chevron-left"></i></button><h2 className="text-xl font-black text-purple-800 uppercase tracking-widest">{selectedRoom}</h2><div className="w-10"></div></div><div className="relative w-full aspect-square bg-purple-50/50 rounded-[3rem] border border-purple-100 overflow-hidden shadow-inner mb-6"><HouseView key={selectedRoom} inventory={inventory} onRoomClick={() => {}} currentLang={targetLang} selectedRoom={selectedRoom} autoFit={true} butlerMessage={butlerMessage} onDismissMessage={() => setButlerMessage(null)} onItemMove={handleItemMove} onAvatarClick={() => setIsQuickChatOpen(!isQuickChatOpen)} butlerImage={butler.appearance.customAvatar} butlerScale={butler.appearance.scale} /></div><div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 pb-20"><h3 className="text-[10px] font-black text-pink-500 uppercase tracking-widest mb-2 px-2">Items stored here</h3>{effectiveInventory.filter(i => i.assignedRoom === selectedRoom && i.currentQuantity > 0).length === 0 ? <div className="text-center py-10 text-purple-300 text-xs">Empty Room (or items consumed)</div> : effectiveInventory.filter(i => i.assignedRoom === selectedRoom && i.currentQuantity > 0).map((item) => <div key={item.id} onClick={() => handleRoomItemClick(item)} className="bg-white p-4 rounded-2xl shadow-sm border border-purple-50 flex items-center justify-between cursor-pointer active:scale-95 transition-transform"><div className="flex items-center space-x-3"><div className="text-2xl">{item.voxelModel ? '🪑' : (item.photo ? <img src={item.photo} alt={item.name} className="w-8 h-8 object-cover rounded-lg border border-purple-100" /> : item.emoji)}</div><div><div className="text-xs font-black text-purple-800">{item.translatedName}</div><div className="flex items-center space-x-2"><div className="text-[9px] text-purple-400">Qty: {item.currentQuantity.toFixed(1)}</div>{item.consumption?.isEnabled && <div className="flex items-center space-x-1 px-1.5 py-0.5 bg-blue-50 rounded-full animate-pulse border border-blue-100"><i className="fas fa-arrow-down text-[6px] text-blue-500"></i><span className="text-[7px] font-bold text-blue-500 uppercase tracking-tight">Consuming</span></div>}</div></div></div><div className="flex flex-col items-end gap-1"><i className="fas fa-chevron-right text-purple-200 text-xs"></i>{item.marketStatus === 'selling' && <span className="text-[8px] font-bold text-pink-500 bg-pink-50 px-1.5 py-0.5 rounded-full uppercase">Selling</span>}{item.marketStatus === 'sold' && <span className="text-[8px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-full uppercase">Sold</span>}</div></div>)}</div></div>}
-        {step === 'item_detail' && selectedItem && <ItemDetailView item={selectedItem} targetLang={targetLang} viewMode={lastStep === 'plaza' ? 'market' : 'inventory'} onBack={() => setStep(lastStep === 'plaza' ? 'plaza' : (selectedRoom ? 'inventory' : 'home'))} onConsume={(q) => { setInventory(prev => prev.map(i => i.id === selectedItem.id ? {...i, currentQuantity: Math.max(0, i.currentQuantity - q)} : i)); setSelectedItem(prev => prev ? {...prev, currentQuantity: Math.max(0, prev.currentQuantity - q)} : null); }} onUpdate={(newItem) => { setInventory(prev => prev.map(i => i.id === newItem.id ? newItem : i)); setSelectedItem(prev => prev && prev.id === newItem.id ? newItem : prev); }} onPublishRequest={handlePublishToPlaza} onChatRequest={() => setStep('chat')} onMarkSold={handleMarkAsSold} onCancelListing={handleCancelListing} />}
-        {step === 'chat' && selectedItem && <ChatView sellerName={selectedItem.sellerName || 'Seller'} itemName={selectedItem.translatedName} basePrice={selectedItem.priceTag || 0} targetLang={targetLang} onBack={() => { if (selectedConversationId) { setStep('inbox'); setSelectedConversationId(null); } else setStep('item_detail'); }} initialMessages={selectedConversationId ? conversations.find(c => c.id === selectedConversationId)?.messages : undefined} onMessageSent={handleMessageSent} />}
+        {step === 'inventory' && selectedRoom && <div className="flex-1 flex flex-col h-full animate-in slide-in-from-right duration-300"><div className="flex justify-between items-center mb-4"><button onClick={goHome} className="w-10 h-10 bg-white rounded-xl shadow-sm text-purple-400 flex items-center justify-center"><i className="fas fa-chevron-left"></i></button><h2 className="text-xl font-black text-purple-800 uppercase tracking-widest">{selectedRoom}</h2><div className="w-10"></div></div><div className="relative w-full aspect-square bg-purple-50/50 rounded-[3rem] border border-purple-100 overflow-hidden shadow-inner mb-6"><HouseView key={selectedRoom} inventory={inventory} onRoomClick={() => {}} currentLang={targetLang} selectedRoom={selectedRoom} autoFit={true} butlerMessage={butlerMessage} onDismissMessage={() => setButlerMessage(null)} onItemMove={handleItemMove} onAvatarClick={() => setIsQuickChatOpen(!isQuickChatOpen)} butlerImage={butler.appearance.customAvatar} butlerScale={butler.appearance.scale} /></div><div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 pb-20"><h3 className="text-[10px] font-black text-pink-500 uppercase tracking-widest mb-2 px-2">Items stored here</h3>{effectiveInventory.filter(i => i.assignedRoom === selectedRoom && i.currentQuantity > 0).length === 0 ? <div className="text-center py-10 text-purple-300 text-xs">Empty Room (or items consumed)</div> : effectiveInventory.filter(i => i.assignedRoom === selectedRoom && i.currentQuantity > 0).map((item) => <div key={item.id} onClick={() => { setSelectedItem(item); setLastStep('inventory'); setStep('item_detail'); }} className="bg-white p-4 rounded-2xl shadow-sm border border-purple-50 flex items-center justify-between cursor-pointer active:scale-95 transition-transform"><div className="flex items-center space-x-3"><div className="text-2xl">{item.voxelModel ? '🪑' : (item.photo ? <img src={item.photo} alt={item.name} className="w-8 h-8 object-cover rounded-lg border border-purple-100" /> : item.emoji)}</div><div><div className="text-xs font-black text-purple-800">{item.translatedName}</div><div className="flex items-center space-x-2"><div className="text-[9px] text-purple-400">Qty: {item.currentQuantity.toFixed(1)}</div></div></div></div><div className="flex flex-col items-end gap-1"><i className="fas fa-chevron-right text-purple-200 text-xs"></i></div></div>)}</div></div>}
+        {step === 'item_detail' && selectedItem && <ItemDetailView item={selectedItem} targetLang={targetLang} viewMode={lastStep === 'plaza' ? 'market' : 'inventory'} onBack={() => setStep(lastStep === 'plaza' ? 'plaza' : (selectedRoom ? 'inventory' : 'home'))} onConsume={(q) => { setInventory(prev => prev.map(i => i.id === selectedItem.id ? {...i, currentQuantity: Math.max(0, i.currentQuantity - q)} : i)); setSelectedItem(prev => prev ? {...prev, currentQuantity: Math.max(0, prev.currentQuantity - q)} : null); }} onUpdate={(newItem) => { setInventory(prev => prev.map(i => i.id === newItem.id ? newItem : i)); setSelectedItem(prev => prev && prev.id === newItem.id ? newItem : prev); }} onPublishRequest={handlePublishToPlaza} onChatRequest={() => setStep('chat')} onMarkSold={handleMarkAsSold} />}
+        {step === 'chat' && selectedItem && <ChatView sellerName={selectedItem.sellerName || 'Seller'} itemName={selectedItem.translatedName} basePrice={selectedItem.priceTag || 0} targetLang={targetLang} onBack={() => { if (selectedConversationId) { setStep('inbox'); setSelectedConversationId(null); } else setStep('item_detail'); }} initialMessages={selectedConversationId ? conversations.find(c => c.id === selectedConversationId)?.messages : undefined} onMessageSent={(text) => { if (selectedConversationId) { setConversations(prev => prev.map(c => c.id === selectedConversationId ? { ...c, messages: [...c.messages, { id: Date.now().toString(), sender: 'me', text, timestamp: Date.now() }] } : c)); } }} />}
         
-        {/* General Text Result Step */}
         {step === 'text_result' && ocrResult && (
            <div className="flex-1 flex flex-col animate-in fade-in py-10 px-4">
               <div className="flex items-center justify-between mb-6">
@@ -1132,21 +1013,9 @@ const App: React.FC = () => {
               </div>
               <div className="bg-white/80 backdrop-blur rounded-[2.5rem] p-8 border border-purple-100 shadow-xl flex-1 flex flex-col">
                   <div className="flex-1 overflow-y-auto custom-scrollbar mb-6">
-                      <p className="text-sm font-medium text-purple-900 leading-relaxed whitespace-pre-wrap">
-                          {ocrResult.fullText || (targetLang === 'zh-CN' ? '未识别到文字' : 'No text recognized.')}
-                      </p>
+                      <p className="text-sm font-medium text-purple-900 leading-relaxed whitespace-pre-wrap">{ocrResult.fullText}</p>
                   </div>
-                  <button 
-                    onClick={() => {
-                        if (ocrResult.fullText) {
-                            navigator.clipboard.writeText(ocrResult.fullText);
-                            setButlerMessage(targetLang === 'zh-CN' ? '已复制到剪贴板' : 'Copied to clipboard');
-                        }
-                    }}
-                    className="w-full py-4 bg-pink-500 text-white font-black rounded-2xl shadow-lg active:scale-95 transition-transform uppercase tracking-widest text-xs"
-                  >
-                    <i className="fas fa-copy mr-2"></i> {targetLang === 'zh-CN' ? '复制全文' : 'Copy All'}
-                  </button>
+                  <button onClick={() => { if (ocrResult.fullText) { navigator.clipboard.writeText(ocrResult.fullText); setButlerMessage(targetLang === 'zh-CN' ? '已复制' : 'Copied'); } }} className="w-full py-4 bg-pink-500 text-white font-black rounded-2xl shadow-lg active:scale-95 transition-transform uppercase tracking-widest text-xs">Copy All</button>
               </div>
            </div>
         )}
@@ -1154,13 +1023,7 @@ const App: React.FC = () => {
         {step === 'review' && ocrResult && (
             <div className="animate-in slide-in-from-bottom duration-500 flex flex-col flex-1 h-full relative">
                 <div className="bg-white rounded-[2.5rem] shadow-xl border border-purple-200 overflow-hidden flex flex-col flex-1">
-                    <div className="p-6 bg-purple-800 text-white flex justify-between items-center">
-                      <div className="flex items-center space-x-3">
-                        <h3 className="font-black text-sm uppercase">AI Review</h3>
-                      </div>
-                      <button onClick={() => setStep('upload')}><i className="fas fa-times"></i></button>
-                    </div>
-
+                    <div className="p-6 bg-purple-800 text-white flex justify-between items-center"><h3 className="font-black text-sm uppercase">AI Review</h3><button onClick={() => setStep('upload')}><i className="fas fa-times"></i></button></div>
                     <div className="px-6 pt-4 bg-slate-50/50"><label className="text-[10px] font-black text-purple-400 uppercase tracking-widest block mb-2">Purchase Date</label><input type="date" value={reviewDate} onChange={(e) => setReviewDate(e.target.value)} className="w-full bg-purple-50 border border-purple-100 rounded-xl p-3 text-sm font-bold text-purple-800 outline-none focus:border-pink-300" /></div>
                     <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50/50">
                         {ocrResult.items?.map((item, i) => (
@@ -1168,79 +1031,17 @@ const App: React.FC = () => {
                                 <div className="flex items-center space-x-4">
                                     {item.photo ? <img src={item.photo} alt={item.name} className="w-12 h-12 object-cover rounded-lg border border-purple-100" /> : <div className="text-3xl">{item.emoji}</div>}
                                     <div className="flex-1"><div className="font-black text-purple-800 text-sm">{item.translatedName}</div><div className="text-[9px] text-purple-400 uppercase font-black">{item.quantity} {item.unit}</div></div>
-                                    <button onClick={() => handleSellClickInReview(i, item)} className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all shadow-sm ${item.isSelling ? 'bg-pink-500 text-white shadow-pink-200' : 'bg-white text-purple-300 border border-purple-100 hover:border-pink-200'}`}><i className="fas fa-hand-holding-dollar text-lg"></i></button>
                                 </div>
-                                <div className="grid grid-cols-2 gap-3 pt-2 border-t border-purple-50"><div><span className="text-[9px] font-bold text-purple-400 uppercase block mb-1">{item.isSelling ? "Original Price" : "Price (¥)"}</span><input type="number" placeholder="0.00" value={item.price || ''} onChange={(e) => handleReviewItemChange(i, { price: parseFloat(e.target.value) })} className="w-full py-1.5 px-3 rounded-lg border border-purple-100 bg-purple-50 text-xs font-bold text-purple-800 outline-none focus:border-pink-300" /></div>{item.isSelling && <div className="animate-in slide-in-from-right duration-300"><span className="text-[9px] font-bold text-pink-400 uppercase block mb-1">Sell Price (¥)</span><input type="number" placeholder="Asking..." value={item.askingPrice || ''} onChange={(e) => handleReviewItemChange(i, { askingPrice: parseFloat(e.target.value) })} className="flex-1 py-1.5 px-3 rounded-lg border border-purple-100 bg-purple-50 text-xs font-bold text-purple-800 outline-none focus:border-pink-300" /></div>}</div>{(item.consumptionRate || item.consumptionFreq) && !item.isSelling && <div className="flex items-center gap-2 bg-blue-50 px-2 py-1 rounded-lg border border-blue-100"><i className="fas fa-magic text-blue-400 text-[10px]"></i><span className="text-[9px] font-bold text-blue-500">Auto-Use: {item.consumptionRate} / {item.consumptionFreq}</span></div>}<div className="flex items-center justify-between border-t border-purple-50 pt-2"><span className="text-[9px] font-bold text-purple-400">Store in:</span><select value={item.assignedRoom || 'storage'} onChange={(e) => handleReviewItemChange(i, { assignedRoom: e.target.value as RoomType })} className="text-[10px] font-bold text-purple-800 bg-purple-50 border border-purple-100 rounded-lg px-2 py-1 outline-none">{ALL_ROOMS.map(r => <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}</select></div>
+                                <div className="grid grid-cols-1 gap-3 pt-2 border-t border-purple-50"><div><span className="text-[9px] font-bold text-purple-400 uppercase block mb-1">Price (¥)</span><input type="number" placeholder="0.00" value={item.price || ''} onChange={(e) => setOcrResult(prev => { if (!prev) return prev; const items = [...prev.items]; items[i].price = parseFloat(e.target.value); return { ...prev, items }; })} className="w-full py-1.5 px-3 rounded-lg border border-purple-100 bg-purple-50 text-xs font-bold text-purple-800 outline-none focus:border-pink-300" /></div></div>
                             </div>
                         ))}
                     </div>
-                    <div className="p-8 bg-white border-t border-purple-50"><button onClick={() => addToInventory(ocrResult.items || [])} className="w-full py-5 bg-pink-500 text-white font-black rounded-2xl shadow-xl uppercase tracking-widest text-xs">Confirm & Add ({butler.personality === 'strict' ? 'Hmph!' : 'Done ✨'})</button></div>
+                    <div className="p-8 bg-white border-t border-purple-50"><button onClick={() => addToInventory(ocrResult.items || [])} className="w-full py-5 bg-pink-500 text-white font-black rounded-2xl shadow-xl uppercase tracking-widest text-xs">Confirm & Add</button></div>
                 </div>
-
-                {sellModalState && (
-                    <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300">
-                        <div className="bg-white w-full h-full max-h-full rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden relative">
-                            <div className="bg-purple-50 p-6 flex flex-col items-center relative shrink-0">
-                                <h3 className="text-sm font-black text-purple-800 mb-6 uppercase tracking-widest">Ready to Sell</h3>
-                                <button onClick={() => setSellModalState(null)} className="absolute top-6 right-6 text-purple-300 hover:text-purple-600"><i className="fas fa-times"></i></button>
-                                <div className="w-24 h-24 bg-white rounded-3xl shadow-lg border-4 border-white flex items-center justify-center text-4xl mb-2">
-                                    {ocrResult.items && ocrResult.items[sellModalState.index]?.photo ? (
-                                        <img src={ocrResult.items[sellModalState.index]!.photo} className="w-full h-full object-cover rounded-2xl" />
-                                    ) : (
-                                        ocrResult.items && ocrResult.items[sellModalState.index]?.emoji
-                                    )}
-                                </div>
-                                <div className="text-xs font-black text-purple-800">
-                                    {ocrResult.items && ocrResult.items[sellModalState.index]?.translatedName}
-                                </div>
-                            </div>
-                            
-                            <div className="p-6 space-y-4 flex-1 overflow-y-auto">
-                                <div className="relative">
-                                    <label className="text-[9px] font-black text-purple-400 uppercase tracking-widest mb-2 block">Sell Price (¥)</label>
-                                    <input 
-                                        type="number" 
-                                        value={sellModalState.price} 
-                                        onChange={(e) => setSellModalState(prev => prev ? { ...prev, price: e.target.value } : null)} 
-                                        className="w-full p-4 bg-purple-50 rounded-2xl font-black text-purple-800 outline-none border border-transparent focus:border-pink-300 transition-all text-center text-lg" 
-                                    />
-                                </div>
-                                
-                                <div className="relative flex-1 flex flex-col">
-                                    <label className="text-[9px] font-black text-purple-400 uppercase tracking-widest mb-2 block">AI Generated Ad</label>
-                                    {sellModalState.loading ? (
-                                        <div className="w-full h-32 bg-purple-50 rounded-2xl flex items-center justify-center">
-                                            <span className="text-[10px] font-bold text-pink-500 animate-pulse flex items-center gap-2">
-                                                <i className="fas fa-sparkles"></i> Butler is writing...
-                                            </span>
-                                        </div>
-                                    ) : (
-                                        <textarea 
-                                            value={sellModalState.ad} 
-                                            onChange={(e) => setSellModalState(prev => prev ? { ...prev, ad: e.target.value } : null)} 
-                                            className="w-full flex-1 p-4 bg-purple-50 rounded-2xl text-xs font-medium text-purple-800 outline-none resize-none border border-transparent focus:border-pink-300 transition-all leading-relaxed min-h-[120px]" 
-                                        />
-                                    )}
-                                </div>
-                            </div>
-
-                            <div className="p-6 pt-0 shrink-0">
-                                <button 
-                                    onClick={handleConfirmSellModal} 
-                                    disabled={sellModalState.loading}
-                                    className="w-full py-4 bg-pink-500 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-xl shadow-pink-200 flex items-center justify-center space-x-2 active:scale-95 transition-all disabled:opacity-50"
-                                >
-                                    <i className="fas fa-store"></i>
-                                    <span>List on Plaza</span>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
             </div>
         )}
-        {step === 'plaza' && <CommunityView items={communityItems} currentLang={targetLang} onItemClick={(item) => { setSelectedItem(item); setLastStep('plaza'); setStep('item_detail'); }} initialView={initialCommunityView} onUserClick={handleCommunityUserClick} onViewChange={setInitialCommunityView} />}
-        {step === 'inbox' && <div className="flex-1 flex flex-col animate-in fade-in pb-20 pt-10 px-6"><h2 className="text-3xl font-black text-purple-800 uppercase tracking-tight mb-6">{NAV_TEXT[targetLang].inbox}</h2><div className="space-y-4 overflow-y-auto custom-scrollbar">{conversations.length === 0 ? <div className="text-center py-20 text-purple-300 text-xs font-bold">No messages yet.</div> : conversations.map(conv => <div key={conv.id} onClick={() => handleOpenConversation(conv)} className={`bg-white p-4 rounded-3xl border ${conv.unread ? 'border-pink-300 shadow-md' : 'border-purple-50 shadow-sm'} flex items-center cursor-pointer active:scale-95 transition-all`}><div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center text-2xl mr-4 relative shrink-0">{conv.avatar}{conv.unread && <div className="absolute top-0 right-0 w-3.5 h-3.5 bg-pink-500 rounded-full border-2 border-white animate-pulse"></div>}</div><div className="flex-1 min-w-0"><div className="flex justify-between items-baseline mb-1"><span className="font-black text-purple-800 text-sm truncate">{conv.otherUserName}</span><span className="text-[9px] text-purple-300 font-bold shrink-0 ml-2">{conv.messages.length > 0 ? new Date(conv.messages[conv.messages.length-1].timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : ''}</span></div><p className={`text-xs truncate ${conv.unread ? 'text-purple-600 font-bold' : 'text-purple-400 font-medium'}`}>{conv.messages.length > 0 ? conv.messages[conv.messages.length-1].text : 'Start chatting...'}</p><div className="mt-1 text-[9px] text-pink-400 font-bold uppercase tracking-wider truncate">{conv.itemName}</div></div></div>)}</div></div>}
+        {step === 'plaza' && <CommunityView items={communityItems} currentLang={targetLang} onItemClick={(item) => { setSelectedItem(item); setLastStep('plaza'); setStep('item_detail'); }} initialView={initialCommunityView} onUserClick={() => {}} onViewChange={setInitialCommunityView} />}
+        {step === 'inbox' && <div className="flex-1 flex flex-col animate-in fade-in pb-20 pt-10 px-6"><h2 className="text-3xl font-black text-purple-800 uppercase tracking-tight mb-6">{NAV_TEXT[targetLang].inbox}</h2><div className="space-y-4 overflow-y-auto custom-scrollbar">{conversations.map(conv => <div key={conv.id} onClick={() => handleOpenConversation(conv)} className={`bg-white p-4 rounded-3xl border ${conv.unread ? 'border-pink-300 shadow-md' : 'border-purple-50 shadow-sm'} flex items-center cursor-pointer active:scale-95 transition-all`}><div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center text-2xl mr-4 relative shrink-0">{conv.avatar}</div><div className="flex-1 min-w-0"><div className="flex justify-between items-baseline mb-1"><span className="font-black text-purple-800 text-sm truncate">{conv.otherUserName}</span></div><p className="text-xs truncate text-purple-400 font-medium">{conv.messages.length > 0 ? conv.messages[conv.messages.length-1].text : 'Start chatting...'}</p></div></div>)}</div></div>}
 
         <div className="fixed bottom-10 inset-x-0 mx-auto max-w-[340px] h-18 bg-white/70 backdrop-blur-3xl border border-white/40 rounded-[2.5rem] shadow-2xl flex items-center justify-around px-2 z-50">
           <button onClick={() => { setStep('home'); setInitialCommunityView('map'); setWalkToRoom(null); setButlerMessage(null); }} className={`w-11 h-11 rounded-2xl transition-all flex items-center justify-center ${step === 'home' || step === 'inventory' ? 'bg-purple-800 text-white shadow-lg' : 'text-purple-300'}`}><i className="fas fa-warehouse text-sm"></i></button>
@@ -1250,7 +1051,6 @@ const App: React.FC = () => {
           <button onClick={() => setStep('butler')} className={`w-11 h-11 rounded-2xl transition-all flex items-center justify-center ${step === 'butler' ? 'bg-purple-800 text-white shadow-lg' : 'text-purple-300'}`}><i className="fas fa-user-astronaut text-sm"></i></button>
         </div>
       </div>
-      <style>{` .custom-scrollbar::-webkit-scrollbar { width: 4px; } .custom-scrollbar::-webkit-scrollbar-thumb { background: #d4b483; border-radius: 10px; } `}</style>
     </Layout>
   );
 };
