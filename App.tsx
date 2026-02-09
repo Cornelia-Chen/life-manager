@@ -67,7 +67,7 @@ function createBlob(data: Float32Array): any {
   };
 }
 
-type AppStep = 'home' | 'plaza' | 'inbox' | 'upload' | 'review' | 'inventory' | 'butler' | 'item_detail' | 'manual_entry' | 'chat' | 'voxel_forge' | 'house_edit'; 
+type AppStep = 'home' | 'plaza' | 'inbox' | 'upload' | 'review' | 'inventory' | 'butler' | 'item_detail' | 'manual_entry' | 'chat' | 'voxel_forge' | 'house_edit' | 'text_result'; 
 
 interface Conversation {
   id: string;
@@ -497,8 +497,12 @@ const App: React.FC = () => {
       const base64Data = await base64Promise;
       const result = await processImageWithAI(base64Data, file.type, targetLang, inventory, mode); 
       setOcrResult(result);
-      setReviewDate(result.purchaseDate || new Date().toISOString().split('T')[0]);
-      setStep('review'); 
+      if (mode === 'text') {
+        setStep('text_result');
+      } else {
+        setReviewDate(result.purchaseDate || new Date().toISOString().split('T')[0]);
+        setStep('review'); 
+      }
     } catch (err: any) {
       setError(err.message || "识别失败");
     } finally {
@@ -713,7 +717,7 @@ const App: React.FC = () => {
                   const currentDaily = target.consumption?.isEnabled 
                         ? (target.consumption.frequency === 'day' ? target.consumption.amount 
                           : target.consumption.frequency === 'week' ? target.consumption.amount/7 
-                          : target.consumption.frequency === 'month' ? target.consumption.amount : target.consumption.amount/30) 
+                          : target.consumption.frequency === 'month' ? target.consumption.amount : target.consumption.frequency === 'year' ? target.consumption.amount/365 : 0) 
                         : 0;
                   
                   const deviation = Math.abs(dailyRate - currentDaily) / (dailyRate || 1);
@@ -1117,6 +1121,36 @@ const App: React.FC = () => {
         {step === 'inventory' && selectedRoom && <div className="flex-1 flex flex-col h-full animate-in slide-in-from-right duration-300"><div className="flex justify-between items-center mb-4"><button onClick={goHome} className="w-10 h-10 bg-white rounded-xl shadow-sm text-purple-400 flex items-center justify-center"><i className="fas fa-chevron-left"></i></button><h2 className="text-xl font-black text-purple-800 uppercase tracking-widest">{selectedRoom}</h2><div className="w-10"></div></div><div className="relative w-full aspect-square bg-purple-50/50 rounded-[3rem] border border-purple-100 overflow-hidden shadow-inner mb-6"><HouseView key={selectedRoom} inventory={inventory} onRoomClick={() => {}} currentLang={targetLang} selectedRoom={selectedRoom} autoFit={true} butlerMessage={butlerMessage} onDismissMessage={() => setButlerMessage(null)} onItemMove={handleItemMove} onAvatarClick={() => setIsQuickChatOpen(!isQuickChatOpen)} butlerImage={butler.appearance.customAvatar} butlerScale={butler.appearance.scale} /></div><div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 pb-20"><h3 className="text-[10px] font-black text-pink-500 uppercase tracking-widest mb-2 px-2">Items stored here</h3>{effectiveInventory.filter(i => i.assignedRoom === selectedRoom && i.currentQuantity > 0).length === 0 ? <div className="text-center py-10 text-purple-300 text-xs">Empty Room (or items consumed)</div> : effectiveInventory.filter(i => i.assignedRoom === selectedRoom && i.currentQuantity > 0).map((item) => <div key={item.id} onClick={() => handleRoomItemClick(item)} className="bg-white p-4 rounded-2xl shadow-sm border border-purple-50 flex items-center justify-between cursor-pointer active:scale-95 transition-transform"><div className="flex items-center space-x-3"><div className="text-2xl">{item.voxelModel ? '🪑' : (item.photo ? <img src={item.photo} alt={item.name} className="w-8 h-8 object-cover rounded-lg border border-purple-100" /> : item.emoji)}</div><div><div className="text-xs font-black text-purple-800">{item.translatedName}</div><div className="flex items-center space-x-2"><div className="text-[9px] text-purple-400">Qty: {item.currentQuantity.toFixed(1)}</div>{item.consumption?.isEnabled && <div className="flex items-center space-x-1 px-1.5 py-0.5 bg-blue-50 rounded-full animate-pulse border border-blue-100"><i className="fas fa-arrow-down text-[6px] text-blue-500"></i><span className="text-[7px] font-bold text-blue-500 uppercase tracking-tight">Consuming</span></div>}</div></div></div><div className="flex flex-col items-end gap-1"><i className="fas fa-chevron-right text-purple-200 text-xs"></i>{item.marketStatus === 'selling' && <span className="text-[8px] font-bold text-pink-500 bg-pink-50 px-1.5 py-0.5 rounded-full uppercase">Selling</span>}{item.marketStatus === 'sold' && <span className="text-[8px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-full uppercase">Sold</span>}</div></div>)}</div></div>}
         {step === 'item_detail' && selectedItem && <ItemDetailView item={selectedItem} targetLang={targetLang} viewMode={lastStep === 'plaza' ? 'market' : 'inventory'} onBack={() => setStep(lastStep === 'plaza' ? 'plaza' : (selectedRoom ? 'inventory' : 'home'))} onConsume={(q) => { setInventory(prev => prev.map(i => i.id === selectedItem.id ? {...i, currentQuantity: Math.max(0, i.currentQuantity - q)} : i)); setSelectedItem(prev => prev ? {...prev, currentQuantity: Math.max(0, prev.currentQuantity - q)} : null); }} onUpdate={(newItem) => { setInventory(prev => prev.map(i => i.id === newItem.id ? newItem : i)); setSelectedItem(prev => prev && prev.id === newItem.id ? newItem : prev); }} onPublishRequest={handlePublishToPlaza} onChatRequest={() => setStep('chat')} onMarkSold={handleMarkAsSold} onCancelListing={handleCancelListing} />}
         {step === 'chat' && selectedItem && <ChatView sellerName={selectedItem.sellerName || 'Seller'} itemName={selectedItem.translatedName} basePrice={selectedItem.priceTag || 0} targetLang={targetLang} onBack={() => { if (selectedConversationId) { setStep('inbox'); setSelectedConversationId(null); } else setStep('item_detail'); }} initialMessages={selectedConversationId ? conversations.find(c => c.id === selectedConversationId)?.messages : undefined} onMessageSent={handleMessageSent} />}
+        
+        {/* General Text Result Step */}
+        {step === 'text_result' && ocrResult && (
+           <div className="flex-1 flex flex-col animate-in fade-in py-10 px-4">
+              <div className="flex items-center justify-between mb-6">
+                <button onClick={() => setStep('upload')} className="w-10 h-10 flex items-center justify-center bg-white rounded-xl text-purple-400 shadow-sm"><i className="fas fa-chevron-left"></i></button>
+                <h2 className="text-xl font-black text-purple-800 uppercase tracking-widest">{targetLang === 'zh-CN' ? '识字结果' : 'Extracted Text'}</h2>
+                <div className="w-10"></div>
+              </div>
+              <div className="bg-white/80 backdrop-blur rounded-[2.5rem] p-8 border border-purple-100 shadow-xl flex-1 flex flex-col">
+                  <div className="flex-1 overflow-y-auto custom-scrollbar mb-6">
+                      <p className="text-sm font-medium text-purple-900 leading-relaxed whitespace-pre-wrap">
+                          {ocrResult.fullText || (targetLang === 'zh-CN' ? '未识别到文字' : 'No text recognized.')}
+                      </p>
+                  </div>
+                  <button 
+                    onClick={() => {
+                        if (ocrResult.fullText) {
+                            navigator.clipboard.writeText(ocrResult.fullText);
+                            setButlerMessage(targetLang === 'zh-CN' ? '已复制到剪贴板' : 'Copied to clipboard');
+                        }
+                    }}
+                    className="w-full py-4 bg-pink-500 text-white font-black rounded-2xl shadow-lg active:scale-95 transition-transform uppercase tracking-widest text-xs"
+                  >
+                    <i className="fas fa-copy mr-2"></i> {targetLang === 'zh-CN' ? '复制全文' : 'Copy All'}
+                  </button>
+              </div>
+           </div>
+        )}
+
         {step === 'review' && ocrResult && (
             <div className="animate-in slide-in-from-bottom duration-500 flex flex-col flex-1 h-full relative">
                 <div className="bg-white rounded-[2.5rem] shadow-xl border border-purple-200 overflow-hidden flex flex-col flex-1">
@@ -1211,7 +1245,7 @@ const App: React.FC = () => {
         <div className="fixed bottom-10 inset-x-0 mx-auto max-w-[340px] h-18 bg-white/70 backdrop-blur-3xl border border-white/40 rounded-[2.5rem] shadow-2xl flex items-center justify-around px-2 z-50">
           <button onClick={() => { setStep('home'); setInitialCommunityView('map'); setWalkToRoom(null); setButlerMessage(null); }} className={`w-11 h-11 rounded-2xl transition-all flex items-center justify-center ${step === 'home' || step === 'inventory' ? 'bg-purple-800 text-white shadow-lg' : 'text-purple-300'}`}><i className="fas fa-warehouse text-sm"></i></button>
           <button onClick={() => setStep('inbox')} className={`w-11 h-11 rounded-2xl transition-all flex items-center justify-center relative ${step === 'inbox' ? 'bg-purple-800 text-white shadow-lg' : 'text-purple-300'}`}><i className="fas fa-comment-dots text-sm"></i>{getUnreadCount() > 0 && <div className="absolute top-2 right-2 w-2.5 h-2.5 bg-pink-500 rounded-full border border-white"></div>}</button>
-          <button onClick={() => setStep('upload')} className={`w-11 h-11 rounded-full transition-all flex items-center justify-center ${step === 'upload' ? 'bg-purple-800 text-white shadow-lg' : 'text-purple-300'}`}><i className="fas fa-camera text-sm"></i></button>
+          <button onClick={() => setStep('upload')} className={`w-11 h-11 rounded-full transition-all flex items-center justify-center ${step === 'upload' || step === 'text_result' ? 'bg-purple-800 text-white shadow-lg' : 'text-purple-300'}`}><i className="fas fa-camera text-sm"></i></button>
           <button onClick={() => { setStep('plaza'); setInitialCommunityView('map'); }} className={`w-11 h-11 rounded-2xl transition-all flex items-center justify-center ${step === 'plaza' ? 'bg-purple-800 text-white shadow-lg' : 'text-purple-300'}`}><i className="fas fa-shopping-bag text-sm"></i></button>
           <button onClick={() => setStep('butler')} className={`w-11 h-11 rounded-2xl transition-all flex items-center justify-center ${step === 'butler' ? 'bg-purple-800 text-white shadow-lg' : 'text-purple-300'}`}><i className="fas fa-user-astronaut text-sm"></i></button>
         </div>

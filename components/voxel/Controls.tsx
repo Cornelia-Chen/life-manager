@@ -27,12 +27,32 @@ const Controls: React.FC<ControlsProps> = ({
   const [enforceSymmetry, setEnforceSymmetry] = useState(true);
   const [axialSymmetry, setAxialSymmetry] = useState(false);
   const importFileRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const clearImage = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setImagePreview(null);
+    if (imageInputRef.current) imageInputRef.current.value = '';
+  };
 
   const handleGenerateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (prompt.trim()) {
       const layers = layerCountInput === '' ? undefined : parseInt(layerCountInput);
-      onGenerate(prompt, gridSize, layers, imagePreview?.split(',')[1], enforceSymmetry, axialSymmetry);
+      // imagePreview 包含 'data:image/jpeg;base64,' 前缀，需要去掉
+      const base64Data = imagePreview ? imagePreview.split(',')[1] : undefined;
+      onGenerate(prompt, gridSize, layers, base64Data, enforceSymmetry, axialSymmetry);
     }
   };
 
@@ -48,27 +68,45 @@ const Controls: React.FC<ControlsProps> = ({
 
       {/* Global Toolbar */}
       <div className="grid grid-cols-4 gap-2">
-        <button onClick={() => {}} className="p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-400 hover:text-red-500 transition-colors"><i className="fas fa-trash-alt text-[10px]"></i></button>
-        <button onClick={onSaveToLibrary} disabled={!hasModel} className="p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-400 hover:text-pink-500 transition-colors"><i className="fas fa-save text-[10px]"></i></button>
-        <button onClick={onExport} className="p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-400 hover:text-indigo-500 transition-colors"><i className="fas fa-download text-[10px]"></i></button>
+        <button onClick={onShowLibrary} className="p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-400 hover:text-indigo-500 transition-colors"><i className="fas fa-th-large text-[10px]"></i></button>
+        <button onClick={onSaveToLibrary} disabled={!hasModel} className="p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-400 hover:text-pink-500 transition-colors disabled:opacity-20"><i className="fas fa-save text-[10px]"></i></button>
+        <button onClick={onExport} disabled={!hasModel} className="p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-400 hover:text-indigo-500 transition-colors disabled:opacity-20"><i className="fas fa-download text-[10px]"></i></button>
         <button onClick={() => importFileRef.current?.click()} className="p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-400 hover:text-indigo-500 transition-colors"><i className="fas fa-upload text-[10px]"></i></button>
         <input type="file" ref={importFileRef} onChange={(e) => e.target.files?.[0] && onImport(e.target.files[0])} className="hidden" accept=".json" />
       </div>
 
-      {/* Grid Params */}
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Grid Size</label>
-            <input type="number" value={gridSize} onChange={e => setGridSize(parseInt(e.target.value)||8)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-indigo-600 outline-none focus:border-indigo-400 transition-colors" />
-        </div>
-        <div className="space-y-2">
-            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Layers</label>
-            <input type="number" value={layerCountInput} onChange={e => setLayerCountInput(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs font-bold text-indigo-600 outline-none focus:border-indigo-400 transition-colors" />
-        </div>
-      </div>
-
       {/* Main Prompt Form */}
       <form onSubmit={handleGenerateSubmit} className="space-y-6">
+        {/* Image Reference Section */}
+        <div className="space-y-3">
+          <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Vision Reference (Optional)</label>
+          <div 
+            onClick={() => imageInputRef.current?.click()}
+            className={`relative h-28 w-full rounded-2xl border-2 border-dashed transition-all flex flex-col items-center justify-center cursor-pointer overflow-hidden ${imagePreview ? 'border-pink-500 bg-pink-50/20' : 'border-slate-200 bg-slate-50 hover:border-pink-300'}`}
+          >
+            {imagePreview ? (
+              <>
+                <img src={imagePreview} alt="Reference" className="w-full h-full object-cover" />
+                <button 
+                  onClick={clearImage}
+                  className="absolute top-2 right-2 w-6 h-6 bg-black/50 text-white rounded-full flex items-center justify-center backdrop-blur-sm hover:bg-black transition-colors"
+                >
+                  <i className="fas fa-times text-[10px]"></i>
+                </button>
+                <div className="absolute bottom-0 left-0 right-0 bg-pink-500/80 backdrop-blur-md py-1 text-center">
+                  <span className="text-[7px] font-black text-white uppercase tracking-widest">Image Loaded</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <i className="fas fa-camera-retro text-2xl text-slate-300 mb-2"></i>
+                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Drop Image or Snap Photo</span>
+              </>
+            )}
+            <input type="file" ref={imageInputRef} onChange={handleImageChange} accept="image/*" className="hidden" />
+          </div>
+        </div>
+
         <div className="space-y-3">
             <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Creation Prompt</label>
             <div className="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden focus-within:border-indigo-400 transition-colors shadow-inner">
@@ -76,7 +114,7 @@ const Controls: React.FC<ControlsProps> = ({
                   value={prompt} 
                   onChange={e => setPrompt(e.target.value)} 
                   disabled={loading} 
-                  className="w-full h-28 bg-transparent p-4 text-[11px] font-medium text-slate-600 outline-none resize-none" 
+                  className="w-full h-24 bg-transparent p-4 text-[11px] font-medium text-slate-600 outline-none resize-none" 
                   placeholder="Describe your furniture..."
                 />
             </div>
@@ -87,6 +125,17 @@ const Controls: React.FC<ControlsProps> = ({
             </div>
         </div>
 
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+              <label className="text-[7px] font-black text-slate-400 uppercase tracking-widest ml-1">Grid Size</label>
+              <input type="number" value={gridSize} onChange={e => setGridSize(parseInt(e.target.value)||8)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-[10px] font-bold text-indigo-600 outline-none focus:border-indigo-400" />
+          </div>
+          <div className="space-y-1">
+              <label className="text-[7px] font-black text-slate-400 uppercase tracking-widest ml-1">Layers</label>
+              <input type="number" value={layerCountInput} onChange={e => setLayerCountInput(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-[10px] font-bold text-indigo-600 outline-none focus:border-indigo-400" />
+          </div>
+        </div>
+
         <div className="flex items-center justify-between bg-slate-50 border border-slate-100 p-3 rounded-2xl">
             <span className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-2">Symmetry Lock</span>
             <button 
@@ -94,7 +143,7 @@ const Controls: React.FC<ControlsProps> = ({
                 onClick={() => setEnforceSymmetry(!enforceSymmetry)}
                 className={`w-10 h-5 rounded-full relative transition-all duration-300 ${enforceSymmetry ? 'bg-pink-500' : 'bg-slate-300'}`}
             >
-                <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all duration-300 ${enforceSymmetry ? 'left-6' : 'left-1'}`}></div>
+                <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all duration-300 ${enforceSymmetry ? (window.innerWidth > 768 ? 'left-6' : 'left-6') : 'left-1'}`}></div>
             </button>
         </div>
 
@@ -104,18 +153,24 @@ const Controls: React.FC<ControlsProps> = ({
             disabled={loading} 
             className="w-full py-4 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white font-black uppercase tracking-[0.2em] text-[11px] rounded-2xl shadow-xl shadow-indigo-100 active:scale-95 transition-all disabled:opacity-50"
         >
-            {loading ? <i className="fas fa-circle-notch fa-spin mr-2"></i> : null}
-            {loading ? "PROFILING..." : "FORGE ARTIFACT"}
+            {loading ? (
+              <span className="flex items-center justify-center gap-2">
+                <i className="fas fa-circle-notch fa-spin"></i>
+                {imagePreview ? "VISUAL ANALYZING..." : "FORGING..."}
+              </span>
+            ) : (
+              "FORGE ARTIFACT"
+            )}
         </button>
       </form>
 
       {/* Refine Section */}
       {hasModel && !loading && (
-          <div className="pt-6 border-t border-slate-100 animate-in slide-in-from-bottom-2">
+          <div className="pt-4 border-t border-slate-100 animate-in slide-in-from-bottom-2">
               <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-3 block">Iterative Tweaks</label>
               <div className="bg-slate-50 border border-slate-200 rounded-2xl p-2 focus-within:border-indigo-400 transition-colors">
-                  <textarea value={feedback} onChange={e => setFeedback(e.target.value)} placeholder="Make it taller, change color..." className="w-full h-20 bg-transparent p-2 text-[10px] text-slate-500 outline-none resize-none" />
-                  <button onClick={() => { onRefine(feedback); setFeedback(''); }} disabled={!feedback.trim()} className="w-full py-2 bg-indigo-100 hover:bg-indigo-200 text-indigo-600 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all">Apply</button>
+                  <textarea value={feedback} onChange={e => setFeedback(e.target.value)} placeholder="Change color, make it taller..." className="w-full h-16 bg-transparent p-2 text-[10px] text-slate-500 outline-none resize-none" />
+                  <button onClick={() => { onRefine(feedback); setFeedback(''); }} disabled={!feedback.trim()} className="w-full py-2 bg-indigo-100 hover:bg-indigo-200 text-indigo-600 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all">Apply Change</button>
               </div>
           </div>
       )}

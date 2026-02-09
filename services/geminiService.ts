@@ -83,44 +83,86 @@ export const addItemTool: FunctionDeclaration = { name: 'addItemToInventory', de
 export const findItemTool: FunctionDeclaration = { name: 'findItemInInventory', description: 'Find item...', parameters: { type: Type.OBJECT, properties: { itemName: { type: Type.STRING } }, required: ['itemName'] } };
 export const consumeItemTool: FunctionDeclaration = { name: 'consumeItem', description: 'Mark an item as finished/consumed and auto-calculate consumption speed.', parameters: { type: Type.OBJECT, properties: { itemName: { type: Type.STRING } }, required: ['itemName'] } };
 
-export async function processImageWithAI(base64Data: string, mimeType: string, lang: LanguageCode, currentInventory: ReceiptItem[], mode: 'single' | 'receipt' = 'receipt'): Promise<OCRResult> {
+export async function processImageWithAI(base64Data: string, mimeType: string, lang: LanguageCode, currentInventory: ReceiptItem[], mode: 'single' | 'receipt' | 'text' = 'receipt'): Promise<OCRResult> {
   const isSingle = mode === 'single';
+  const isText = mode === 'text';
   
-  const prompt = isSingle 
-    ? `TASK: 
-       Identify object. Categorize strictly:
-       - "food": Edible raw ingredients or cooked food.
-       - "appliance": Fridge, microwave, stove, etc.
-       - "household": Bags, cleaning tools, furniture.
-       - "medicine": Lozenges, pills, medical supplies.
-       - "other": Misc.
-       Return JSON:
-       {
-         "items": [{"name": string, "emoji": string, "quantity": number, "price": number, "unit": string, "assignedRoom": string, "category": string}],
-         "purchaseDate": "YYYY-MM-DD"
-       }
-       Translate names to ${lang}.`
-    : `TASK:
-       Receipt OCR. Extract ALL items and categorize them:
-       - "food": ONLY edible ingredients/food items.
-       - "household": Paper towels, plastic bags, soap, etc.
-       - "appliance": Kitchen electronics/hardware.
-       - "medicine": Medical supplies, throat lozenges.
-       - "other": Meta-items or misc.
-       IMPORTANT: If an item is a multipack, extract unit count.
-       JSON FORMAT:
-       {
-         "items": [{"name": string, "emoji": string, "quantity": number, "price": number, "unit": string, "category": string}],
-         "purchaseDate": "YYYY-MM-DD"
-       }
-       Translate names to ${lang}.`;
+  let prompt = '';
+  let responseSchema: any = null;
+
+  if (isText) {
+    prompt = `TASK: Extract ALL visible text from the image accurately. Preserve layout where possible.
+    Return JSON format: { "fullText": string, "languageDetected": string }`;
+    responseSchema = {
+      type: Type.OBJECT,
+      properties: {
+        fullText: { type: Type.STRING, description: "The complete recognized text." },
+        languageDetected: { type: Type.STRING, description: "Detected language code." }
+      },
+      required: ["fullText"]
+    };
+  } else if (isSingle) {
+    prompt = `TASK: Identify object. Categorize strictly. Translate names to ${lang}.
+    Return JSON format: { "items": [{"name": string, "emoji": string, "quantity": number, "price": number, "unit": string, "category": string}], "purchaseDate": "YYYY-MM-DD" }`;
+    responseSchema = {
+      type: Type.OBJECT,
+      properties: {
+        items: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              name: { type: Type.STRING },
+              emoji: { type: Type.STRING },
+              quantity: { type: Type.NUMBER },
+              price: { type: Type.NUMBER },
+              unit: { type: Type.STRING },
+              category: { type: Type.STRING }
+            }
+          }
+        },
+        purchaseDate: { type: Type.STRING }
+      }
+    };
+  } else {
+    prompt = `TASK: Receipt OCR. Extract ALL items. Categorize. Translate to ${lang}.
+    Return JSON format: { "items": [{"name": string, "emoji": string, "quantity": number, "price": number, "unit": string, "category": string}], "purchaseDate": "YYYY-MM-DD" }`;
+    responseSchema = {
+      type: Type.OBJECT,
+      properties: {
+        items: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              name: { type: Type.STRING },
+              emoji: { type: Type.STRING },
+              quantity: { type: Type.NUMBER },
+              price: { type: Type.NUMBER },
+              unit: { type: Type.STRING },
+              category: { type: Type.STRING }
+            }
+          }
+        },
+        purchaseDate: { type: Type.STRING }
+      }
+    };
+  }
 
   try {
     const text = await safeGenAIRequest(
       [{ inlineData: { mimeType, data: base64Data } }, { text: prompt }],
-      { responseMimeType: 'application/json' }
+      { 
+        responseMimeType: 'application/json',
+        responseSchema: responseSchema
+      }
     );
     const json = JSON.parse(text || "{}");
+    
+    if (isText) {
+      return { items: [], fullText: json.fullText, rawText: text };
+    }
+
     const items = (json.items || []).map((i: any) => ({ 
       ...i, 
       translatedName: i.name, 
@@ -135,7 +177,9 @@ export async function processImageWithAI(base64Data: string, mimeType: string, l
       rawText: text,
       fullText: "" 
     };
-  } catch (e: any) { return { items: [], rawText: e.toString() }; }
+  } catch (e: any) { 
+    return { items: [], rawText: e.toString() }; 
+  }
 }
 
 export async function predictEmoji(name: string): Promise<string> {

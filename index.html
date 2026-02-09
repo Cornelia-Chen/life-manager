@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#ec4899"> <!-- Updated to pink-500 -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <link rel="apple-touch-icon" href="/pwa-192.png">
+  <link rel="manifest" href="manifest.json">
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700;800;900&display=swap" rel="stylesheet">
@@ -52,6 +52,14 @@
 </head>
 <body>
   <div id="root"></div>
+  <script>
+    // 注册 Service Worker 实现离线能力
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW registration failed', err));
+      });
+    }
+  </script>
 <script type="module" src="/index.tsx"></script>
 </body>
 </html>
