@@ -67,7 +67,9 @@ $$T_{final} = S \cdot T(-x_c, -y_c)$$
 This contains everything you need to run your app locally.
 
 View your app in AI Studio: https://ai.studio/apps/drive/1Rz2AchyIqP4TAxSIOl5cCQ2BA3LaD2E3
-**Try it out**: https://life-manager-mocha.vercel.app/
+
+## **Try it out**: 
+https://life-manager-mocha.vercel.app/
 
 ## Run Locally
 
