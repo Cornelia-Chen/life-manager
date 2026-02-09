@@ -68,7 +68,7 @@ This contains everything you need to run your app locally.
 
 View your app in AI Studio: https://ai.studio/apps/drive/1Rz2AchyIqP4TAxSIOl5cCQ2BA3LaD2E3
 # Try it out：
- life-manager-mocha.vercel.app
+[ life-manager-mocha.vercel.app](https://life-manager-mocha.vercel.app/)
 
 ## Run Locally
 
