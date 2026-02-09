@@ -1,7 +1,8 @@
+
 import React, { useRef, useState } from 'react';
 import { LanguageCode } from '../services/geminiService';
 
-export type ScanMode = 'single' | 'receipt' | 'text';
+export type ScanMode = 'single' | 'receipt';
 
 interface UploaderProps {
   onImageSelect: (file: File, mode: ScanMode) => void;
@@ -23,15 +24,14 @@ export const Uploader: React.FC<UploaderProps> = ({ onImageSelect, isLoading, cu
     }
   };
 
-  const TEXT: Record<LanguageCode, { loading: string; idle: string; sub: string; format: string; modeSingle: string; modeReceipt: string; modeText: string }> = {
+  const TEXT: Record<LanguageCode, { loading: string; idle: string; sub: string; format: string; modeSingle: string; modeReceipt: string }> = {
     'zh-CN': {
       loading: '正在解析... (别催我)',
       idle: '点击拍照或选择照片',
       sub: '艾莉丝将不情愿地为您识别物品、数量、单位并自动合并同类项',
       format: '支持 JPG / PNG / WEBP',
       modeSingle: '单品实物',
-      modeReceipt: '购物小票',
-      modeText: '通用识字'
+      modeReceipt: '购物小票'
     },
     'en': {
       loading: 'Analyzing... (Don\'t rush me)',
@@ -39,8 +39,7 @@ export const Uploader: React.FC<UploaderProps> = ({ onImageSelect, isLoading, cu
       sub: 'Alice will reluctantly identify items, quantities, and units for you.',
       format: 'Supports JPG / PNG / WEBP',
       modeSingle: 'Single Item',
-      modeReceipt: 'Receipt',
-      modeText: 'Extract Text'
+      modeReceipt: 'Receipt'
     },
     'fr': {
       loading: 'Analyse en cours...',
@@ -48,8 +47,7 @@ export const Uploader: React.FC<UploaderProps> = ({ onImageSelect, isLoading, cu
       sub: 'Alice identifiera à contrecœur les articles et les quantités.',
       format: 'Supporte JPG / PNG / WEBP',
       modeSingle: 'Objet Unique',
-      modeReceipt: 'Ticket',
-      modeText: 'OCR Texte'
+      modeReceipt: 'Ticket'
     },
     'ja': {
       loading: '解析中... (急かさないで)',
@@ -57,8 +55,7 @@ export const Uploader: React.FC<UploaderProps> = ({ onImageSelect, isLoading, cu
       sub: 'アリスが不本意ながらアイテム、数量、単位を特定します。',
       format: 'JPG / PNG / WEBP 対応',
       modeSingle: '単品',
-      modeReceipt: 'レシート',
-      modeText: '文字認識'
+      modeReceipt: 'レシート'
     },
     'es': {
       loading: 'Analizando...',
@@ -66,8 +63,7 @@ export const Uploader: React.FC<UploaderProps> = ({ onImageSelect, isLoading, cu
       sub: 'Alice identificará a regañadientes los artículos y cantidades.',
       format: 'Soporta JPG / PNG / WEBP',
       modeSingle: 'Objeto Único',
-      modeReceipt: 'Recibo',
-      modeText: 'OCR Texto'
+      modeReceipt: 'Recibo'
     }
   };
 
@@ -76,27 +72,21 @@ export const Uploader: React.FC<UploaderProps> = ({ onImageSelect, isLoading, cu
   return (
     <div className="flex flex-col gap-4">
       {/* Mode Switcher */}
-      <div className="bg-purple-100 p-1 rounded-2xl flex relative h-12">
+      <div className="bg-purple-100 p-1 rounded-2xl flex relative">
         <div 
-            className={`absolute top-1 bottom-1 w-[32%] bg-white rounded-xl shadow-sm transition-all duration-300 ease-out ${scanMode === 'receipt' ? 'left-1' : scanMode === 'single' ? 'left-[34%]' : 'left-[67%]'}`}
+            className={`absolute top-1 bottom-1 w-1/2 bg-white rounded-xl shadow-sm transition-all duration-300 ease-out ${scanMode === 'receipt' ? 'left-1' : 'left-[calc(50%-4px)] translate-x-[calc(4px)]'}`}
         ></div>
         <button 
             onClick={() => setScanMode('receipt')}
-            className={`flex-1 relative z-10 py-2 text-[10px] font-black uppercase tracking-tight text-center transition-colors ${scanMode === 'receipt' ? 'text-purple-800' : 'text-purple-400'}`}
+            className={`flex-1 relative z-10 py-3 text-xs font-black uppercase tracking-widest text-center transition-colors ${scanMode === 'receipt' ? 'text-purple-800' : 'text-purple-400'}`}
         >
-            <i className="fas fa-receipt mr-1"></i>{t.modeReceipt}
+            <i className="fas fa-receipt mr-2"></i>{t.modeReceipt}
         </button>
         <button 
             onClick={() => setScanMode('single')}
-            className={`flex-1 relative z-10 py-2 text-[10px] font-black uppercase tracking-tight text-center transition-colors ${scanMode === 'single' ? 'text-purple-800' : 'text-purple-400'}`}
+            className={`flex-1 relative z-10 py-3 text-xs font-black uppercase tracking-widest text-center transition-colors ${scanMode === 'single' ? 'text-purple-800' : 'text-purple-400'}`}
         >
-            <i className="fas fa-cube mr-1"></i>{t.modeSingle}
-        </button>
-        <button 
-            onClick={() => setScanMode('text')}
-            className={`flex-1 relative z-10 py-2 text-[10px] font-black uppercase tracking-tight text-center transition-colors ${scanMode === 'text' ? 'text-purple-800' : 'text-purple-400'}`}
-        >
-            <i className="fas fa-font mr-1"></i>{t.modeText}
+            <i className="fas fa-cube mr-2"></i>{t.modeSingle}
         </button>
       </div>
 
@@ -122,7 +112,7 @@ export const Uploader: React.FC<UploaderProps> = ({ onImageSelect, isLoading, cu
             ? 'bg-pink-500 text-white animate-pulse' 
             : 'bg-white text-pink-500 group-hover:bg-pink-500 group-hover:text-white group-hover:rotate-6'
         }`}>
-          <i className={`fas ${isLoading ? 'fa-sync fa-spin' : (scanMode === 'text' ? 'fa-font' : 'fa-camera')} text-4xl`}></i>
+          <i className={`fas ${isLoading ? 'fa-sync fa-spin' : 'fa-camera'} text-4xl`}></i>
         </div>
 
         <div className="text-center space-y-3">
@@ -132,8 +122,6 @@ export const Uploader: React.FC<UploaderProps> = ({ onImageSelect, isLoading, cu
           <p className="text-purple-400 text-sm max-w-[200px] mx-auto leading-relaxed">
             {scanMode === 'single' 
                 ? (currentLang === 'zh-CN' ? '拍摄单个物品，将直接使用照片作为图标。' : 'Snap a single item. The photo will be used as its icon.') 
-                : scanMode === 'text'
-                ? (currentLang === 'zh-CN' ? '提取图片中的所有文字，支持多国语言。' : 'Extract all visible text from the image.')
                 : t.sub}
           </p>
           
