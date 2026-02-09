@@ -96,6 +96,15 @@ interface Conversation {
 }
 
 const DEFAULT_CUSTOM_AVATAR = "https://raw.githubusercontent.com/Cornelia-Chen/fox-ai-butler-model/ca95e7a85fcefb8c8e932d6afa4a0a35dcc38a25/Subject%20(2).png";
+
+const ROOM_NAMES: Record<LanguageCode, Record<RoomType, string>> = {
+  'zh-CN': { kitchen: '厨房', living: '客厅', bedroom: '卧室', bathroom: '浴室', balcony: '阳台', storage: '储藏室', cloakroom: '衣帽间' },
+  'en': { kitchen: 'Kitchen', living: 'Living', bedroom: 'Bedroom', bathroom: 'Bath', balcony: 'Balcony', storage: 'Storage', cloakroom: 'Cloakroom' },
+  'fr': { kitchen: 'Cuisine', living: 'Salon', bedroom: 'Chambre', bathroom: 'Bain', balcony: 'Balcon', storage: 'Stockage', cloakroom: 'Vestiaire' },
+  'ja': { kitchen: 'キッチン', living: '居間', bedroom: '寝室', bathroom: '浴室', balcony: 'ベランダ', storage: '倉庫', cloakroom: 'クローク' },
+  'es': { kitchen: 'Cocina', living: 'Sala', bedroom: 'Dormitorio', bathroom: 'Baño', balcony: 'Balcón', storage: 'Almacén', cloakroom: 'Vestidor' },
+};
+
 const NAV_TEXT: Record<LanguageCode, { home: string; inbox: string; scan: string; plaza: string; butler: string }> = {
   'zh-CN': { home: '我的家', inbox: '消息', scan: '扫描', plaza: '广场', butler: '管家' },
   'en': { home: 'Home', inbox: 'Inbox', scan: 'Scan', plaza: 'Plaza', butler: 'Butler' },
@@ -107,7 +116,7 @@ const NAV_TEXT: Record<LanguageCode, { home: string; inbox: string; scan: string
 const ONBOARDING_TEXT: Record<LanguageCode, any> = {
     'zh-CN': {
         choose_lang: '请选择您的语言',
-        choose_butler: '选择您的AI管家形象',
+        choose_butler: '给您的管家起个名字并选择形象',
         welcome: '欢迎回来，主人！',
         tour_home: '这是您的“家”，在这里可以3D可视化管理所有家具和资产。',
         tour_inbox: '这里处理邻里消息，您可以和他人沟通闲置物品交易。',
@@ -119,7 +128,7 @@ const ONBOARDING_TEXT: Record<LanguageCode, any> = {
     },
     'en': {
         choose_lang: 'Choose Your Language',
-        choose_butler: 'Select Butler Avatar',
+        choose_butler: 'Name your butler and select an avatar',
         welcome: 'Welcome back, Master!',
         tour_home: 'This is your Home. Manage all furniture and assets in 3D.',
         tour_inbox: 'Check your messages here to trade pre-loved items.',
@@ -131,7 +140,7 @@ const ONBOARDING_TEXT: Record<LanguageCode, any> = {
     },
     'fr': {
         choose_lang: 'Choisissez votre langue',
-        choose_butler: 'Sélectionnez l\'avatar du majordome',
+        choose_butler: 'Nommez votre majordome et choisissez un avatar',
         welcome: 'Bon retour, Maître !',
         tour_home: 'C\'est votre maison. Gérez tous les meubles et actifs en 3D.',
         tour_inbox: 'Consultez vos messages ici pour échanger des articles.',
@@ -143,7 +152,7 @@ const ONBOARDING_TEXT: Record<LanguageCode, any> = {
     },
     'ja': {
         choose_lang: '言語を選択してください',
-        choose_butler: '執事のアバターを選択',
+        choose_butler: '執事の名前を決め、アバターを選択',
         welcome: 'おかえりなさい、ご主人様！',
         tour_home: 'ここはあなたの「家」です。3Dですべての家具と資産を管理できます。',
         tour_inbox: '近所のメッセージを確認し、不用品の取引ができます。',
@@ -155,10 +164,10 @@ const ONBOARDING_TEXT: Record<LanguageCode, any> = {
     },
     'es': {
         choose_lang: 'Elige tu idioma',
-        choose_butler: 'Selecciona el avatar del mayordomo',
+        choose_butler: 'Nombra a tu mayordomo y selecciona un avatar',
         welcome: '¡Bienvenido de nuevo, Maestro!',
         tour_home: 'Este es tu Hogar. Gestiona todos los muebles y activos en 3D.',
-        tour_inbox: 'Revisa tus mensajes aquí para intercambiar artículos.',
+        tour_inbox: 'Revisa tus messages aquí para intercambiar artículos.',
         tour_camera: '¡El núcleo! OCR de IA para recibos y extracción de texto.',
         tour_plaza: 'Plaza de la comunidad. Mira lo que venden los vecinos.',
         tour_butler: 'Mi cuartel general. Personaliza mi personalidad o busca recetas.',
@@ -608,6 +617,66 @@ const App: React.FC = () => {
     }
   }, [targetLang, inventory]);
 
+  const handleDirectSell = async (ocrItem: any) => {
+    setIsLoading(true);
+    try {
+        const newId = 'inv-' + Math.random().toString(36).substr(2, 9);
+        const recordTimestamp = reviewDate ? new Date(reviewDate).getTime() : Date.now();
+        const roomCenter = ROOM_CENTERS['storage'] || { x: 24, y: 24 };
+        
+        const invItem: ReceiptItem = {
+          id: newId,
+          name: ocrItem.name || ocrItem.translatedName || "Unknown",
+          translatedName: ocrItem.translatedName || ocrItem.name || "Unknown",
+          emoji: ocrItem.emoji || "📦",
+          unit: ocrItem.unit || "unit",
+          assignedRoom: 'storage',
+          history: [{ timestamp: recordTimestamp, quantity: ocrItem.quantity || 1, unitPrice: ocrItem.price || 0 }],
+          currentQuantity: ocrItem.quantity || 1,
+          photo: ocrItem.photo,
+          alertType: 'none', 
+          showOnMap: true,
+          position: { x: roomCenter.x + (Math.random()-0.5)*2, y: roomCenter.y + (Math.random()-0.5)*2 },
+          category: ocrItem.category
+        };
+
+        setInventory(prev => [invItem, ...prev]);
+
+        // Trigger AI Ad Generation and navigate to market
+        const ad = await generateSaleAd(invItem, targetLang);
+        const price = ocrItem.price || 0;
+        const marketItem: ReceiptItem = { 
+            ...invItem, 
+            id: `market-${Date.now()}`, 
+            originalItemId: invItem.id, 
+            sellerName: 'Me', 
+            priceTag: price, 
+            description: ad, 
+            isPublic: true, 
+            marketStatus: 'selling', 
+            currentQuantity: 1 
+        };
+        
+        setCommunityItems(prev => [marketItem, ...prev]);
+        setInitialCommunityView('market');
+        setStep('plaza');
+        setOcrResult(null);
+
+        // Butler message and movement
+        const roomLabel = ROOM_NAMES[targetLang]['storage'];
+        const tip = targetLang === 'zh-CN' 
+            ? `物品已自动入库到${roomLabel}并上架广场。点击房间可以详细查看哦！` 
+            : `Item stored in ${roomLabel} and listed on plaza. Tap the room to take a closer look!`;
+        setButlerMessage(`${butler.name}: ${tip}`);
+        setWalkToRoom('storage');
+
+    } catch (e) {
+        setError("Direct sell failed");
+    } finally {
+        setIsLoading(false);
+    }
+  };
+
   const addToInventory = (ocrItems: Partial<ReceiptItem & { price: number; quantity: number }>[]) => {
     const restockCandidates: Partial<ReceiptItem & { quantity: number; price: number }>[] = [];
     const directAddItems: typeof ocrItems = [];
@@ -652,7 +721,6 @@ const App: React.FC = () => {
   const processBatch = (itemsToAdd: Partial<ReceiptItem & { price: number; quantity: number; consumptionRate?: number; consumptionFreq?: string; isSelling?: boolean; askingPrice?: number } & { consumption?: ConsumptionConfig }>[]) => {
     let updatedInventory = [...inventory];
     const recordTimestamp = reviewDate ? new Date(reviewDate).getTime() : Date.now();
-    const marketItemsToAdd: ReceiptItem[] = [];
     
     itemsToAdd.forEach((newItem, index) => {
       const name = (newItem.translatedName || newItem.name || "Unknown").trim();
@@ -677,7 +745,7 @@ const App: React.FC = () => {
         const roomCenter = ROOM_CENTERS[assignedRoom as RoomType] || { x: 24, y: 24 };
         const randomOffsetX = (Math.random() - 0.5) * 4; 
         const randomOffsetY = (Math.random() - 0.5) * 4;
-        const newId = Math.random().toString(36).substr(2, 9);
+        const newId = 'inv-' + Math.random().toString(36).substr(2, 9);
         const invItem: ReceiptItem = {
           id: newId,
           name: rawName || name,
@@ -704,6 +772,20 @@ const App: React.FC = () => {
     });
     setInventory(updatedInventory);
     setStep('home');
+
+    // Butler notification for rooms and trigger movement
+    const uniqueRooms = Array.from(new Set(itemsToAdd.map(i => {
+        const cat = i.category || 'other';
+        return i.assignedRoom || (cat === 'food' ? 'kitchen' : (cat === 'appliance' ? 'kitchen' : (cat === 'medicine' ? 'bathroom' : 'storage')));
+    })));
+    const roomNames = uniqueRooms.map(r => ROOM_NAMES[targetLang][r as RoomType]).join('、');
+    const tip = targetLang === 'zh-CN' 
+        ? `物品已分别存入${roomNames}。点击房间可以进入内部查看哦！` 
+        : `Items stored in ${roomNames}. Tap a room to explore!`;
+    setButlerMessage(`${butler.name}: ${tip}`);
+    if (uniqueRooms.length > 0) {
+        setWalkToRoom(uniqueRooms[0] as RoomType);
+    }
   };
 
   const handleRestockConfirm = (didFinishPrevious: boolean) => {
@@ -722,8 +804,15 @@ const App: React.FC = () => {
           };
           setInventory(updatedInventory);
       }
+      const roomOfItem = restockCheck.item.assignedRoom;
       setRestockCheck(null);
       setStep('home');
+      
+      const tip = targetLang === 'zh-CN' 
+          ? `补货已完成！您可以点击房间查看实时库存。` 
+          : `Restock complete! Tap a room to check current stock.`;
+      setButlerMessage(`${butler.name}: ${tip}`);
+      setWalkToRoom(roomOfItem);
   };
 
   const goHome = () => { 
@@ -782,10 +871,30 @@ const App: React.FC = () => {
   };
 
   const handleMarkAsSold = (item: ReceiptItem) => {
-      const updatedItem = { ...item, marketStatus: 'sold' as 'sold', currentQuantity: 0, showOnMap: false };
-      setCommunityItems(prev => prev.map(i => i.id === item.id ? updatedItem : i));
-      setInventory(prev => prev.map(i => i.id === item.id ? updatedItem : i));
-      setSelectedItem(updatedItem);
+      const originalId = item.originalItemId || item.id;
+      
+      setInventory(prev => prev.map(i => {
+          if (i.id === originalId) {
+              const newQty = Math.max(0, i.currentQuantity - 1);
+              return { 
+                  ...i, 
+                  currentQuantity: newQty,
+                  showOnMap: newQty > 0
+              };
+          }
+          return i;
+      }));
+
+      setCommunityItems(prev => prev.map(i => {
+          if (i.id === item.id) {
+              return { ...i, marketStatus: 'sold' };
+          }
+          return i;
+      }));
+
+      if (selectedItem?.id === item.id) {
+          setSelectedItem({ ...item, marketStatus: 'sold' });
+      }
   };
 
   const handleOpenConversation = (conv: Conversation) => {
@@ -872,6 +981,17 @@ const App: React.FC = () => {
                       <h3 className="text-xl font-black text-purple-900 mb-2 relative z-10">{ot.welcome}</h3>
                       <p className="text-sm font-bold text-purple-400 mb-6 relative z-10">{ot.choose_butler}</p>
                       
+                      {/* Name Input */}
+                      <div className="w-full mb-6 relative z-10">
+                          <input 
+                              type="text" 
+                              value={butler.name} 
+                              onChange={(e) => setButler({ ...butler, name: e.target.value })}
+                              className="w-full px-6 py-4 bg-purple-50 border-2 border-transparent focus:border-pink-300 rounded-2xl outline-none text-purple-800 font-bold transition-all text-center text-lg"
+                              placeholder="Butler Name"
+                          />
+                      </div>
+
                       {/* Full Butler Preview */}
                       <div className="w-full aspect-[4/5] bg-purple-50 rounded-3xl overflow-hidden mb-6 border-2 border-white shadow-inner relative group">
                           <img 
@@ -879,9 +999,6 @@ const App: React.FC = () => {
                             className="w-full h-full object-contain drop-shadow-2xl transition-all duration-700 group-hover:scale-105" 
                             alt="Butler Preview" 
                           />
-                          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-1.5 bg-white/80 backdrop-blur rounded-full text-[10px] font-black text-purple-800 shadow-lg border border-white">
-                             {PRESET_AVATARS.find(a => a.src === butler.appearance.customAvatar)?.name || 'Ready!'}
-                          </div>
                       </div>
 
                       <div className="grid grid-cols-3 gap-3 w-full mb-8 relative z-10">
@@ -1027,7 +1144,14 @@ const App: React.FC = () => {
                     <div className="px-6 pt-4 bg-slate-50/50"><label className="text-[10px] font-black text-purple-400 uppercase tracking-widest block mb-2">Purchase Date</label><input type="date" value={reviewDate} onChange={(e) => setReviewDate(e.target.value)} className="w-full bg-purple-50 border border-purple-100 rounded-xl p-3 text-sm font-bold text-purple-800 outline-none focus:border-pink-300" /></div>
                     <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50/50">
                         {ocrResult.items?.map((item, i) => (
-                            <div key={i} className="flex flex-col p-4 bg-white rounded-2xl border border-purple-100 space-y-3">
+                            <div key={i} className="flex flex-col p-4 bg-white rounded-2xl border border-purple-100 space-y-3 relative">
+                                <button 
+                                    onClick={() => handleDirectSell(item)}
+                                    className="absolute top-4 right-4 w-8 h-8 bg-pink-500 text-white rounded-xl shadow-lg flex items-center justify-center active:scale-90 transition-all z-10"
+                                    title="Sell Direct"
+                                >
+                                    <i className="fas fa-hand-holding-dollar text-xs"></i>
+                                </button>
                                 <div className="flex items-center space-x-4">
                                     {item.photo ? <img src={item.photo} alt={item.name} className="w-12 h-12 object-cover rounded-lg border border-purple-100" /> : <div className="text-3xl">{item.emoji}</div>}
                                     <div className="flex-1"><div className="font-black text-purple-800 text-sm">{item.translatedName}</div><div className="text-[9px] text-purple-400 uppercase font-black">{item.quantity} {item.unit}</div></div>
